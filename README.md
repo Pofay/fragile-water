@@ -1,6 +1,14 @@
 # FragileWater
 
-**TODO: Add description**
+This Elixir Project is my follow along of [Pikdum's](https://github.com/pikdum) Elixir implementation of his [Thistle Tea Wow Server](https://github.com/pikdum/thistle_tea) from these sources:
+
+- [Pikdum's Blog](https://pikdum.dev/)
+- Github commits
+
+Like him I want to learn more about Elixir and its ecosystem and experiment with the language.
+
+Instead of using the original [MangosZero](https://github.com/mangoszero) I opted to use [CMangos](https://github.com/cmangos) specifically its [Burning Crusade expansion](https://github.com/cmangos/mangos-tbc) since it was easier to setup.
+
 
 ## Installation
 
