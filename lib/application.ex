@@ -10,11 +10,4 @@ defmodule FragileWater.Application do
     opts = [strategy: :one_for_one, name: FragileWater.Supervisor]
     Supervisor.start_link(children, opts)
   end
-
-  defp server_opts do
-    %{
-      port: 8080,
-      handler: {FragileWater.Handler, []}
-    }
-  end
 end
