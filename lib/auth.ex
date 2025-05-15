@@ -6,6 +6,14 @@ defmodule FragileWater.Auth do
   use ThousandIsland.Handler
 
   @cmd_auth_logon_challenge 0
+  @cmd_auth_logon_proof 1
+
+  @n <<137, 75, 100, 94, 137, 225, 83, 91, 189, 173, 91, 139, 41, 6, 80, 83, 8, 1, 177, 142, 191,
+       191, 94, 143, 171, 60, 130, 135, 42, 62, 155, 183>>
+  @g <<7>>
+
+  @username "pofay"
+  @password "pofay"
 
   @impl ThousandIsland.Handler
   def handle_data(<<@cmd_auth_logon_challenge, data::binary>>, socket, state) do
