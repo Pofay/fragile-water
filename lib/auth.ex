@@ -34,8 +34,7 @@ defmodule FragileWater.Auth do
     salt = <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0>>
     hash = :crypto.hash(:sha, String.upcase(@username) <> ":" <> String.upcase(@password))
-    # Based on Shadowburn's implementation, from Pikdum's commit this is reversed
-    x = :crypto.hash(:sha, salt <> hash)
+    x = reverse(:crypto.hash(:sha, salt <> hash))
     verifier = :crypto.mod_pow(@g, x, @n)
 
     private_b = :crypto.strong_rand_bytes(19)
@@ -65,15 +64,22 @@ defmodule FragileWater.Auth do
   end
 
   @impl ThousandIsland.Handler
-  def handle_data(<<@cmd_auth_logon_proof, public_a_raw::little-bytes-size(32), client_proof::little-bytes-size(20), _crc_hash::little-bytes-size(20),
-  _number_of_keys::little-bytes-size(8), _security_flags::little-size(8)>>, socket, state) do
+  def handle_data(<<@cmd_auth_logon_proof,
+                    public_a::little-bytes-size(32),
+                    client_proof::little-bytes-size(20),
+                    _crc_hash::little-bytes-size(20),
+                    _number_of_keys::little-size(8),
+                    _security_flags::little-size(8)>>,
+                    socket,
+                    state) do
+
     Logger.info("LOGON PROOF")
     Logger.info("state: #{inspect(state)}")
 
-    public_a= reverse(public_a_raw)
-    scrambler = :crypto.hash(:sha, reverse(public_a) <> reverse(state.public_b))
+    public_a_reversed = reverse(public_a)
+    scrambler = :crypto.hash(:sha, public_a <> reverse(state.public_b))
 
-    compute_key = :crypto.compute_key(:srp, public_a, {state.public_b, state.private_b}, {:host, [state.verifier, @n, :"6", reverse(scrambler)]})
+    compute_key = :crypto.compute_key(:srp, public_a_reversed, {state.public_b, state.private_b}, {:host, [state.verifier, @n, :"6", reverse(scrambler)]})
     s = reverse(compute_key)
 
     session = interleave(s)
@@ -83,7 +89,7 @@ defmodule FragileWater.Auth do
 
     t3 = :crypto.exor(mod_hash, generator_hash)
     t4 = :crypto.hash(:sha, state.username)
-    m =  :crypto.hash(:sha, t3 <> t4 <> state.salt <> reverse(public_a) <> state.public_b <> session)
+    m =  :crypto.hash(:sha, t3 <> t4 <> state.salt <> public_a <> reverse(state.public_b) <> session)
 
     if m == client_proof do
       Logger.info("Client proof matches!")
@@ -92,19 +98,6 @@ defmodule FragileWater.Auth do
       Logger.info("public_a: #{inspect(public_a)}")
       Logger.info("client_proof: #{inspect(client_proof)}")
       Logger.info("m: #{inspect(m)}")
-      Logger.info("state: #{inspect(state)}")
-      Logger.info("session: #{inspect(session)}")
-      Logger.info("scrambler: #{inspect(scrambler)}")
-      Logger.info("public_b: #{inspect(state.public_b)}")
-      Logger.info("salt: #{inspect(state.salt)}")
-      Logger.info("verifier: #{inspect(state.verifier)}")
-      Logger.info("private_b: #{inspect(state.private_b)}")
-      Logger.info("n: #{inspect(@n)}")
-      Logger.info("g: #{inspect(@g)}")
-      Logger.info("t3: #{inspect(t3)}")
-      Logger.info("t4: #{inspect(t4)}")
-      Logger.info("mod_hash: #{inspect(mod_hash)}")
-      Logger.info("generator_hash: #{inspect(generator_hash)}")
     end
 
     ThousandIsland.Socket.send(socket, <<0,0, 5>>)
