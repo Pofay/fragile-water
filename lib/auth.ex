@@ -30,7 +30,9 @@ defmodule FragileWater.Auth do
         _state
       ) do
     Logger.info("Handling logon challenge")
-    salt = :crypto.strong_rand_bytes(32)
+
+    salt = <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0>>
     hash = :crypto.hash(:sha, String.upcase(@username) <> ":" <> String.upcase(@password))
     # Based on Shadowburn's implementation, from Pikdum's commit this is reversed
     x = :crypto.hash(:sha, salt <> hash)
@@ -63,6 +65,54 @@ defmodule FragileWater.Auth do
   end
 
   @impl ThousandIsland.Handler
+  def handle_data(<<@cmd_auth_logon_proof, public_a_raw::little-bytes-size(32), client_proof::little-bytes-size(20), _crc_hash::little-bytes-size(20),
+  _number_of_keys::little-bytes-size(8), _security_flags::little-size(8)>>, socket, state) do
+    Logger.info("LOGON PROOF")
+    Logger.info("state: #{inspect(state)}")
+
+    public_a= reverse(public_a_raw)
+    scrambler = :crypto.hash(:sha, reverse(public_a) <> reverse(state.public_b))
+
+    compute_key = :crypto.compute_key(:srp, public_a, {state.public_b, state.private_b}, {:host, [state.verifier, @n, :"6", reverse(scrambler)]})
+    s = reverse(compute_key)
+
+    session = interleave(s)
+
+    mod_hash = :crypto.hash(:sha, reverse(@n))
+    generator_hash = :crypto.hash(:sha, @g)
+
+    t3 = :crypto.exor(mod_hash, generator_hash)
+    t4 = :crypto.hash(:sha, state.username)
+    m =  :crypto.hash(:sha, t3 <> t4 <> state.salt <> reverse(public_a) <> state.public_b <> session)
+
+    if m == client_proof do
+      Logger.info("Client proof matches!")
+    else
+      Logger.error("Client proof does not match!")
+      Logger.info("public_a: #{inspect(public_a)}")
+      Logger.info("client_proof: #{inspect(client_proof)}")
+      Logger.info("m: #{inspect(m)}")
+      Logger.info("state: #{inspect(state)}")
+      Logger.info("session: #{inspect(session)}")
+      Logger.info("scrambler: #{inspect(scrambler)}")
+      Logger.info("public_b: #{inspect(state.public_b)}")
+      Logger.info("salt: #{inspect(state.salt)}")
+      Logger.info("verifier: #{inspect(state.verifier)}")
+      Logger.info("private_b: #{inspect(state.private_b)}")
+      Logger.info("n: #{inspect(@n)}")
+      Logger.info("g: #{inspect(@g)}")
+      Logger.info("t3: #{inspect(t3)}")
+      Logger.info("t4: #{inspect(t4)}")
+      Logger.info("mod_hash: #{inspect(mod_hash)}")
+      Logger.info("generator_hash: #{inspect(generator_hash)}")
+    end
+
+    ThousandIsland.Socket.send(socket, <<0,0, 5>>)
+    {:close, state}
+  end
+
+
+  @impl ThousandIsland.Handler
   def handle_data(data, socket, state) do
     IO.inspect("UNHANDLED")
     <<msg::binary-size(1), _rest::binary>> = data
@@ -71,4 +121,23 @@ defmodule FragileWater.Auth do
     ThousandIsland.Socket.send(socket, data)
     {:continue, state}
   end
+
+  defp interleave(s) do
+    list = Binary.to_list(s)
+
+    t1 = Binary.from_list(interleave_t1(list))
+    t2 = Binary.from_list(interleave_t2(list))
+
+    t1_hash = Binary.to_list(:crypto.hash(:sha, t1))
+    t2_hash = Binary.to_list(:crypto.hash(:sha, t2))
+
+    Binary.from_list(List.flatten(Enum.map(Enum.zip([t1_hash, t2_hash]), &Tuple.to_list/1)))
+  end
+
+  defp interleave_t1([a, _ | rest]), do: [a | interleave_t1(rest)]
+  defp interleave_t1([]), do: []
+
+  defp interleave_t2([_, b | rest]), do: [b | interleave_t2(rest)]
+  defp interleave_t2([]), do: []
+
 end
