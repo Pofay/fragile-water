@@ -46,7 +46,12 @@ defmodule FragileWater.Auth do
 
     response =
       <<0, 0, 0>> <>
-        reverse(public_b) <> <<1, @g, 32>> <> reverse(@n) <> salt <> unk3 <> <<0>>
+      reverse(public_b) <>
+      <<1, @g, 32>> <>
+      reverse(@n) <>
+      salt <>
+      unk3 <>
+      <<0>>
 
     IO.inspect(response, label: "Response", limit: :infinity)
 
