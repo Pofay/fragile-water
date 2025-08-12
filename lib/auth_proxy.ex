@@ -1,4 +1,3 @@
-
 defmodule FragileWater.AuthProxy do
   @moduledoc """
   A MITM Auth Proxy following pikdum's thistle_tea implementation.
