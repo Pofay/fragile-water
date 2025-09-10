@@ -20,7 +20,8 @@ defmodule FragileWater.Auth do
 
   @impl ThousandIsland.Handler
   def handle_data(
-        <<@cmd_auth_logon_challenge, _error::little-size(8), _size::little-size(16),
+        # Fix parameter names according to Pikdum's commit
+        <<@cmd_auth_logon_challenge, _protocol_version::little-size(8), _size::little-size(16),
           _game::bytes-little-size(4), _v1::little-size(8), _v2::little-size(8),
           _v3::little-size(8), _build::little-size(16), _platform::bytes-little-size(4),
           _os::bytes-size(4), _locale::bytes-size(4), _utc_offset::little-size(32),
@@ -31,43 +32,29 @@ defmodule FragileWater.Auth do
       ) do
     Logger.info("Handling logon challenge")
 
-    salt =
-      <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0>>
-
-    hash = :crypto.hash(:sha, String.upcase(@username) <> ":" <> String.upcase(@password))
-    x = reverse(:crypto.hash(:sha, salt <> hash))
-    verifier = :crypto.mod_pow(@g, x, @n)
-
-    private_b = :crypto.strong_rand_bytes(19)
-    {public_b, _} = :crypto.generate_key(:srp, {:host, [verifier, @g, @n, :"6"]}, private_b)
+    state = logon_challenge_state(username)
 
     unk3 = :crypto.strong_rand_bytes(16)
 
-    response =
+    packet =
       <<0, 0, 0>> <>
-      reverse(public_b) <>
-      <<1, @g, 32>> <>
-      reverse(@n) <>
-      salt <>
-      unk3 <>
-      <<0>>
+        reverse(state.public_b) <>
+        <<1>> <>
+        state.g <>
+        <<32>> <>
+        reverse(state.n) <>
+        state.salt <>
+        unk3 <>
+        <<0>>
 
-    IO.inspect(response, label: "Response", limit: :infinity)
+    IO.inspect(packet, label: "Response", limit: :infinity)
 
     ThousandIsland.Socket.send(
       socket,
-      response
+      packet
     )
 
-    {:continue,
-     %{
-       salt: salt,
-       verifier: verifier,
-       private_b: private_b,
-       public_b: public_b,
-       username: username
-     }}
+    {:continue, state}
   end
 
   @impl ThousandIsland.Handler
@@ -105,8 +92,18 @@ defmodule FragileWater.Auth do
     m =
       :crypto.hash(:sha, t3 <> t4 <> state.salt <> public_a <> reverse(state.public_b) <> session)
 
+
     if m == client_proof do
       Logger.info("Client proof matches!")
+
+      server_proof = :crypto.hash(:sha, reverse(public_a) <> client_proof <> session)
+
+      state = Map.merge(state, %{public_a: public_a, session: session, server_proof: server_proof })
+
+
+      ThousandIsland.Socket.send(socket, <<1, 0>> <> state.server_proof <> <<0,0,0>>)
+
+
     else
       Logger.error("Client proof does not match!")
       Logger.info("public_a: #{inspect(public_a)}")
@@ -148,4 +145,41 @@ defmodule FragileWater.Auth do
 
   defp interleave_t2([_, b | rest]), do: [b | interleave_t2(rest)]
   defp interleave_t2([]), do: []
+
+  defp calculate_private_b(state) do
+    private_b = :crypto.strong_rand_bytes(19)
+    Map.merge(state, %{private_b: private_b})
+  end
+
+  defp calculate_public_b(state) do
+    {public_b, _} =
+      :crypto.generate_key(
+        :srp,
+        {:host, [state.verifier, state.g, state.n, :"6", state.private_b]}
+      )
+
+      Map.merge(state, %{public_b: public_b})
+  end
+
+  defp account_state(account) do
+    salt =
+      <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0>>
+
+    hash = :crypto.hash(:sha, String.upcase(@username) <> ":" <> String.upcase(@password))
+    x = reverse(:crypto.hash(:sha, salt <> hash))
+
+     %{n: @n, g: @g}
+    |> Map.merge(%{account_name: account})
+    |> Map.merge(%{
+      verifier: :crypto.mod_pow(@g, x, @n)
+    })
+    |> Map.merge(%{salt: salt})
+  end
+
+  defp logon_challenge_state(account) do
+    account_state(account)
+    |> calculate_private_b()
+    |> calculate_public_b()
+  end
 end
