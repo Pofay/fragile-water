@@ -5,7 +5,7 @@ defmodule FragileWater.Application do
   def start(_type, _args) do
     children = [
       # {ThousandIsland, port: 3724, handler_module: FragileWater.AuthProxy}
-      {ThousandIsland, port: 3724, handler_module: FragileWater.Auth}
+      {ThousandIsland, port: 3724, handler_module: FragileWater.Auth, handler_options: %{}}
     ]
 
     opts = [strategy: :one_for_one, name: FragileWater.Supervisor]
