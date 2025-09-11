@@ -102,7 +102,10 @@ defmodule FragileWater.Auth do
       state =
         Map.merge(state, %{public_a: public_a, session: session, server_proof: server_proof})
 
-      ThousandIsland.Socket.send(socket, <<1, 0>> <> state.server_proof <> <<0, 0, 0, 0>>)
+      packet = <<1, 0>> <> state.server_proof <> <<0, 0, 0, 0>>
+
+      ThousandIsland.Socket.send(socket, packet)
+      Logger.info("#{inspect(packet)}")
       {:continue, state}
     else
       Logger.error("Client proof does not match!")
