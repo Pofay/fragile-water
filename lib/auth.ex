@@ -21,15 +21,15 @@ defmodule FragileWater.Auth do
   @impl ThousandIsland.Handler
   def handle_data(
         <<@cmd_auth_logon_challenge, _protocol_version::little-size(8), _size::little-size(16),
-          _game_name::bytes-little-size(4), _version::bytes-little-size(3), _build::little-size(16),
-          _platform::bytes-little-size(4), _os::bytes-little-size(4), _locale::bytes-little-size(4),
-          _world_region_bias::little-size(32), _ip::little-size(32),
-          account_name_length::unsigned-little-size(8),
+          _game_name::bytes-little-size(4), _version::bytes-little-size(3),
+          _build::little-size(16), _platform::bytes-little-size(4), _os::bytes-little-size(4),
+          _locale::bytes-little-size(4), _world_region_bias::little-size(32),
+          _ip::little-size(32), account_name_length::unsigned-little-size(8),
           account_name::bytes-little-size(account_name_length)>>,
         socket,
         _state
       ) do
-    Logger.info("[Authentication: LOGON CHALLENGE] #{account_name}");
+    Logger.info("[Authentication: LOGON CHALLENGE] #{account_name}")
 
     state = logon_challenge_state(account_name)
 
@@ -46,11 +46,11 @@ defmodule FragileWater.Auth do
         unk3 <>
         <<0>>
 
-
     ThousandIsland.Socket.send(
       socket,
       packet
     )
+
     {:continue, state}
   end
 
@@ -87,7 +87,10 @@ defmodule FragileWater.Auth do
     t4 = :crypto.hash(:sha, state.account_name)
 
     m =
-      :crypto.hash(:sha, t3 <> t4 <> state.salt <> reverse(public_a) <> reverse(state.public_b) <> session)
+      :crypto.hash(
+        :sha,
+        t3 <> t4 <> state.salt <> reverse(public_a) <> reverse(state.public_b) <> session
+      )
 
     Logger.info("LOGON PROOF: Verifying client proof for #{state.account_name}")
 
@@ -96,19 +99,20 @@ defmodule FragileWater.Auth do
 
       server_proof = :crypto.hash(:sha, reverse(public_a) <> client_proof <> session)
 
-      state = Map.merge(state, %{public_a: public_a, session: session, server_proof: server_proof })
+      state =
+        Map.merge(state, %{public_a: public_a, session: session, server_proof: server_proof})
 
-      ThousandIsland.Socket.send(socket, <<1, 0>> <> state.server_proof <> <<0,0,0>>)
+      ThousandIsland.Socket.send(socket, <<1, 0>> <> state.server_proof <> <<0, 0, 0, 0>>)
       {:continue, state}
     else
       Logger.error("Client proof does not match!")
       Logger.info("public_a: #{inspect(public_a)}")
       Logger.info("client_proof: #{inspect(client_proof)}")
       Logger.info("m: #{inspect(m)}")
-    end
 
-    ThousandIsland.Socket.send(socket, <<0, 0, 5>>)
-    {:close, state}
+      ThousandIsland.Socket.send(socket, <<0, 0, 5>>)
+      {:close, state}
+    end
   end
 
   @impl ThousandIsland.Handler
@@ -146,6 +150,7 @@ defmodule FragileWater.Auth do
 
   defp calculate_public_b(state) do
     IO.inspect(state)
+
     {public_b, _} =
       :crypto.generate_key(
         :srp,
@@ -153,7 +158,7 @@ defmodule FragileWater.Auth do
         state.private_b
       )
 
-      Map.merge(state, %{public_b: public_b})
+    Map.merge(state, %{public_b: public_b})
   end
 
   defp account_state(account) do
@@ -164,7 +169,7 @@ defmodule FragileWater.Auth do
     hash = :crypto.hash(:sha, String.upcase(@username) <> ":" <> String.upcase(@password))
     x = reverse(:crypto.hash(:sha, salt <> hash))
 
-     %{n: @n, g: @g}
+    %{n: @n, g: @g}
     |> Map.merge(%{account_name: account})
     |> Map.merge(%{
       verifier: :crypto.mod_pow(@g, x, @n)
