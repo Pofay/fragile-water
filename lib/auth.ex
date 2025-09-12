@@ -18,9 +18,8 @@ defmodule FragileWater.Auth do
   @username "pofay"
   @password "pofay"
 
-  # Currently finding out why build number 5875
-  # has a different login flow than build number 8606
   @impl ThousandIsland.Handler
+  # From https://wowdev.wiki/CMD_AUTH_LOGON_CHALLENGE_Client
   def handle_data(
         <<@cmd_auth_logon_challenge, protocol_version::little-size(8), _size::little-size(16),
           _game_name::bytes-little-size(4), _version::bytes-little-size(3),
@@ -38,6 +37,7 @@ defmodule FragileWater.Auth do
 
     unk3 = :crypto.strong_rand_bytes(16)
 
+    # From https://wowdev.wiki/CMD_AUTH_LOGON_CHALLENGE_Server
     packet =
       <<0, 0, 0>> <>
         reverse(state.public_b) <>
@@ -51,6 +51,7 @@ defmodule FragileWater.Auth do
 
     Logger.info("[Authentication: LOGON CHALLENGE] Server Proof Generated")
     Logger.info("#{inspect(packet)}")
+
     ThousandIsland.Socket.send(
       socket,
       packet
@@ -60,6 +61,7 @@ defmodule FragileWater.Auth do
   end
 
   @impl ThousandIsland.Handler
+  # From https://wowdev.wiki/CMD_AUTH_LOGON_PROOF_Client
   def handle_data(
         <<@cmd_auth_logon_proof, client_public_key::little-bytes-size(32),
           client_proof::little-bytes-size(20), _crc_hash::little-bytes-size(20),
@@ -109,11 +111,13 @@ defmodule FragileWater.Auth do
       state =
         Map.merge(state, %{public_a: public_a, session: session, server_proof: server_proof})
 
-      packet = <<1, 0>> <>
-              state.server_proof <>
-              <<0, 0, 128, 0>> <>
-              <<0, 0, 0, 0>> <>
-              <<0, 0>>
+      # From https://wowdev.wiki/CMD_AUTH_LOGON_PROOF_Server
+      packet =
+        <<1, 0>> <>
+          state.server_proof <>
+          <<0, 0, 128, 0>> <>
+          <<0, 0, 0, 0>> <>
+          <<0, 0>>
 
       ThousandIsland.Socket.send(socket, packet)
       Logger.info("#{inspect(packet)}")
