@@ -18,9 +18,11 @@ defmodule FragileWater.Auth do
   @username "pofay"
   @password "pofay"
 
+  # Currently finding out why build number 5875
+  # has a different login flow than build number 8606
   @impl ThousandIsland.Handler
   def handle_data(
-        <<@cmd_auth_logon_challenge, _protocol_version::little-size(8), _size::little-size(16),
+        <<@cmd_auth_logon_challenge, protocol_version::little-size(8), _size::little-size(16),
           _game_name::bytes-little-size(4), _version::bytes-little-size(3),
           _build::little-size(16), _platform::bytes-little-size(4), _os::bytes-little-size(4),
           _locale::bytes-little-size(4), _world_region_bias::little-size(32),
@@ -30,6 +32,7 @@ defmodule FragileWater.Auth do
         _state
       ) do
     Logger.info("[Authentication: LOGON CHALLENGE] #{account_name}")
+    Logger.info("[Authentication: LOGON CHALLENGE] Version: #{protocol_version}")
 
     state = logon_challenge_state(account_name)
 
@@ -46,6 +49,8 @@ defmodule FragileWater.Auth do
         unk3 <>
         <<0>>
 
+    Logger.info("[Authentication: LOGON CHALLENGE] Server Proof Generated")
+    Logger.info("#{inspect(packet)}")
     ThousandIsland.Socket.send(
       socket,
       packet
@@ -63,6 +68,7 @@ defmodule FragileWater.Auth do
         state
       ) do
     Logger.info("Authentication: LOGON PROOF #{state.account_name}")
+    Logger.info("Client Proof: #{inspect(client_proof)}")
     Logger.info("state: #{inspect(state)}")
 
     public_a = reverse(client_public_key)
@@ -93,6 +99,7 @@ defmodule FragileWater.Auth do
       )
 
     Logger.info("LOGON PROOF: Verifying client proof for #{state.account_name}")
+    Logger.info("Generated M1: #{inspect(m)}")
 
     if m == client_proof do
       Logger.info("LOGON PROOF: Client proof matched for #{state.account_name}")
@@ -102,7 +109,11 @@ defmodule FragileWater.Auth do
       state =
         Map.merge(state, %{public_a: public_a, session: session, server_proof: server_proof})
 
-      packet = <<1, 0>> <> state.server_proof <> <<0, 0, 0, 0>>
+      packet = <<1, 0>> <>
+              state.server_proof <>
+              <<0, 0, 128, 0>> <>
+              <<0, 0, 0, 0>> <>
+              <<0, 0>>
 
       ThousandIsland.Socket.send(socket, packet)
       Logger.info("#{inspect(packet)}")
@@ -165,10 +176,7 @@ defmodule FragileWater.Auth do
   end
 
   defp account_state(account) do
-    salt =
-      <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0>>
-
+    salt = :crypto.strong_rand_bytes(32)
     hash = :crypto.hash(:sha, String.upcase(@username) <> ":" <> String.upcase(@password))
     x = reverse(:crypto.hash(:sha, salt <> hash))
 
