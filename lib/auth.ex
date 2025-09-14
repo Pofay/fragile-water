@@ -143,13 +143,20 @@ defmodule FragileWater.Auth do
   defp interleave(s) do
     list = Binary.to_list(s)
 
-    t1 = Binary.from_list(interleave_t1(list))
-    t2 = Binary.from_list(interleave_t2(list))
+    t1_hash =
+      interleave_t1(list)
+      |> Binary.from_list()
+      |> sha_hash()
+      |> Binary.to_list()
 
-    t1_hash = Binary.to_list(:crypto.hash(:sha, t1))
-    t2_hash = Binary.to_list(:crypto.hash(:sha, t2))
+    t2_hash =
+      interleave_t2(list)
+      |> Binary.from_list()
+      |> sha_hash()
+      |> Binary.to_list()
 
-    Enum.zip([t1_hash, t2_hash])
+    [t1_hash, t2_hash]
+    |> Enum.zip()
     |> Enum.map(&Tuple.to_list/1)
     |> List.flatten()
     |> Binary.from_list()
@@ -196,5 +203,9 @@ defmodule FragileWater.Auth do
     account_state(account)
     |> calculate_private_b
     |> calculate_public_b
+  end
+
+  def sha_hash(value) do
+    :crypto.hash(:sha, value)
   end
 end
