@@ -10,6 +10,7 @@ defmodule FragileWater.Auth do
 
   @cmd_auth_logon_challenge 0
   @cmd_auth_logon_proof 1
+  @cmd_realm_list 16
 
   @n <<137, 75, 100, 94, 137, 225, 83, 91, 189, 173, 91, 139, 41, 6, 80, 83, 8, 1, 177, 142, 191,
        191, 94, 143, 171, 60, 130, 135, 42, 62, 155, 183>>
@@ -21,7 +22,7 @@ defmodule FragileWater.Auth do
   @impl ThousandIsland.Handler
   # From https://wowdev.wiki/CMD_AUTH_LOGON_CHALLENGE_Client
   def handle_data(
-        <<@cmd_auth_logon_challenge, protocol_version::little-size(8), _size::little-size(16),
+        <<@cmd_auth_logon_challenge, _protocol_version::little-size(8), _size::little-size(16),
           _game_name::bytes-little-size(4), _version::bytes-little-size(3),
           _build::little-size(16), _platform::bytes-little-size(4), _os::bytes-little-size(4),
           _locale::bytes-little-size(4), _world_region_bias::little-size(32),
@@ -30,8 +31,7 @@ defmodule FragileWater.Auth do
         socket,
         _state
       ) do
-    Logger.info("[Authentication: LOGON CHALLENGE] #{account_name}")
-    Logger.info("[Authentication: LOGON CHALLENGE] Version: #{protocol_version}")
+    Logger.info("[AUTH LOGON CHALLENGE]: #{account_name}")
 
     state = logon_challenge_state(account_name)
 
@@ -49,7 +49,7 @@ defmodule FragileWater.Auth do
         unk3 <>
         <<0>>
 
-    Logger.info("[Authentication: LOGON CHALLENGE] Server Proof Generated")
+    Logger.info("[AUTH LOGON CHALLENGE]: Server Proof Generated")
     Logger.info("#{inspect(packet)}")
 
     ThousandIsland.Socket.send(
@@ -69,9 +69,7 @@ defmodule FragileWater.Auth do
         socket,
         state
       ) do
-    Logger.info("Authentication: LOGON PROOF #{state.account_name}")
-    Logger.info("Client Proof: #{inspect(client_proof)}")
-    Logger.info("state: #{inspect(state)}")
+    Logger.info("[AUTH PROOF]: #{state.account_name}")
 
     public_a = reverse(client_public_key)
     scrambler = :crypto.hash(:sha, reverse(public_a) <> reverse(state.public_b))
@@ -100,11 +98,10 @@ defmodule FragileWater.Auth do
         t3 <> t4 <> state.salt <> reverse(public_a) <> reverse(state.public_b) <> session
       )
 
-    Logger.info("LOGON PROOF: Verifying client proof for #{state.account_name}")
-    Logger.info("Generated M1: #{inspect(m)}")
+    Logger.info("[AUTH PROOF]: Verifying client proof for #{state.account_name}")
 
     if m == client_proof do
-      Logger.info("LOGON PROOF: Client proof matched for #{state.account_name}")
+      Logger.info("[AUTH PROOF]: Client proof matched for #{state.account_name}")
 
       server_proof = :crypto.hash(:sha, reverse(public_a) <> client_proof <> session)
 
@@ -131,6 +128,41 @@ defmodule FragileWater.Auth do
       ThousandIsland.Socket.send(socket, <<0, 0, 5>>)
       {:close, state}
     end
+  end
+
+  @impl ThousandIsland.Handler
+  def handle_data(<<@cmd_realm_list, _padding::binary>>, socket, state) do
+    IO.inspect("[REALM LIST]: #{inspect(@cmd_realm_list)}")
+
+    # From https://wowdev.wiki/CMD_REALM_LIST_Server#_(2.4.3.8606)
+    realm =
+      <<1::little-size(8)>> <>
+        <<0::size(8)>> <>
+        <<0::size(8)>> <>
+        "pofay.gg" <>
+        <<0>> <>
+        "127.0.0.1:8085" <>
+        <<0>> <>
+        <<200.0::little-float-size(32)>> <>
+        <<0::size(8)>> <>
+        <<1::size(8)>> <>
+        <<0::size(8)>>
+
+    footer = <<0, 0>>
+    body = realm <> footer
+    # Difference in header size from Vanilla to TBC gives the calculation a -1.
+    realms_size = 6 + byte_size(body)
+    num_realms = 1
+
+    header =
+      <<16::size(8)>> <>
+        <<realms_size::little-size(16)>> <>
+        <<0::size(32)>> <>
+        <<num_realms::little-size(16)>>
+
+    packet = header <> body
+    ThousandIsland.Socket.send(socket, packet)
+    {:continue, state}
   end
 
   @impl ThousandIsland.Handler
