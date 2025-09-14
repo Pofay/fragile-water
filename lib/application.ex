@@ -3,6 +3,8 @@ defmodule FragileWater.Application do
 
   @impl true
   def start(_type, _args) do
+    FragileWater.SessionStorage.init()
+
     children = [
       # {ThousandIsland, port: 3724, handler_module: FragileWater.AuthProxy}
       {ThousandIsland, port: 3724, handler_module: FragileWater.Auth, handler_options: %{}}
