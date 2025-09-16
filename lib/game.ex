@@ -18,4 +18,7 @@ defmodule FragileWater.Game do
     ThousandIsland.Socket.send(socket, packet)
     {:continue, %{seed: seed}}
   end
+
+  # @impl ThousandIsland.Handler
+  # def handle_data(<<size::big-size(16), 0x1ED::little-size(32)>>)
 end
