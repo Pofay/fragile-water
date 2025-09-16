@@ -7,7 +7,8 @@ defmodule FragileWater.Application do
 
     children = [
       # {ThousandIsland, port: 3724, handler_module: FragileWater.AuthProxy}
-      {ThousandIsland, port: 3724, handler_module: FragileWater.Auth, handler_options: %{}}
+      {ThousandIsland, port: 3724, handler_module: FragileWater.Auth, handler_options: %{}},
+      {ThousandIsland, port: 8085, handler_module: FragileWater.Game, handler_options: %{}}
     ]
 
     opts = [strategy: :one_for_one, name: FragileWater.Supervisor]
