@@ -136,7 +136,7 @@ defmodule FragileWater.Auth do
 
   @impl ThousandIsland.Handler
   def handle_data(<<@cmd_realm_list, _padding::binary>>, socket, state) do
-    IO.inspect("[REALM LIST]: #{inspect(@cmd_realm_list)}")
+    Logger.info("[REALM LIST]: #{inspect(@cmd_realm_list)}")
 
     # From https://wowdev.wiki/CMD_REALM_LIST_Server#_(2.4.3.8606)
     realm =
@@ -171,7 +171,7 @@ defmodule FragileWater.Auth do
 
   @impl ThousandIsland.Handler
   def handle_data(<<opcode, _packet::binary>>, socket, state) do
-    IO.inspect("UNHANDLED opcode: #{opcode}")
+    Logger.error("UNHANDLED opcode: #{opcode}")
     ThousandIsland.Socket.send(socket, <<0, 0, 5>>)
     {:close, state}
   end
@@ -210,8 +210,6 @@ defmodule FragileWater.Auth do
   end
 
   defp calculate_public_b(state) do
-    IO.inspect(state)
-
     {public_b, _} =
       :crypto.generate_key(
         :srp,
