@@ -88,6 +88,8 @@ defmodule FragileWater.Auth do
 
     session = interleave(s)
 
+    Logger.info("Session key size generated: #{inspect(byte_size(session))}")
+
     mod_hash = :crypto.hash(:sha, reverse(@n))
     generator_hash = :crypto.hash(:sha, @g)
 
