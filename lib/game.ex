@@ -52,6 +52,9 @@ defmodule FragileWater.Game do
         state.seed <>
         session
 
+    ## This is where I got it wrong, my byte size is 40 for my session.
+    Logger.info("[GameServer]  Key size is: #{inspect(byte_size(session))}")
+
     server_proof = :crypto.hash(:sha, data)
 
     if client_proof == server_proof do
@@ -70,6 +73,16 @@ defmodule FragileWater.Game do
       Logger.error("[GameServer] Authentication failed for #{username}")
       {:close, state}
     end
+  end
+
+  @impl ThousandIsland.Handler
+  def handle_data(
+        <<_size::big-size(16), opcode::little-size(32)>>,
+        _socket,
+        state
+      ) do
+    Logger.error("[GameServer] Received OPCODE FOR CMSG_CHAR_ENUM: #{inspect(opcode)}")
+    {:close, state}
   end
 
   @impl ThousandIsland.Handler
