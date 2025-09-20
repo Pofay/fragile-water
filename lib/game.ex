@@ -2,6 +2,10 @@ defmodule FragileWater.Game do
   use ThousandIsland.Handler
   require Logger
 
+  import Bitwise, only: [bxor: 2]
+
+  alias FragileWater.SessionStorage
+
   @smsg_auth_challenge 0x1EC
 
   @impl ThousandIsland.Handler
@@ -28,13 +32,57 @@ defmodule FragileWater.Game do
         state
       ) do
     <<build::little-size(32), server_id::little-size(32), rest::binary>> = body
-
     {username, additional_bits} = extract_username_with_rest(rest)
 
-    # <<client_seed :: little-size>>
+    <<client_seed::little-bytes-size(4), client_proof::little-bytes-size(20), _bits::binary>> =
+      additional_bits
+
+    Logger.info(
+      "[GameServer] Received CMSG_AUTH_SESSION with build: #{build} and server_id: #{server_id}"
+    )
+
+    Logger.info("[GameServer] Username: #{username}")
+
+    {username, session} = hd(SessionStorage.get(username))
+
+    data =
+      username <>
+        <<0::little-size(32)>> <>
+        client_seed <>
+        state.seed <>
+        session
+
+    server_proof = :crypto.hash(:sha, data)
+
+    if client_proof == server_proof do
+      Logger.info("[GameServer] Authentication Successful for #{username}")
+
+      crypt = %{key: session, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
+
+      {packet, crypt} =
+        build_packet(0x1EE, <<0x0C::little-size(32), 0, 0::little-size(32)>>, crypt)
+
+      Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+
+      ThousandIsland.Socket.send(socket, packet)
+      {:continue, Map.merge(state, %{username: username, crypt: crypt})}
+    else
+      Logger.error("[GameServer] Authentication failed for #{username}")
+      {:close, state}
+    end
   end
 
-  def extract_username_with_rest(payload) do
+  @impl ThousandIsland.Handler
+  def handle_data(
+        packet,
+        _socket,
+        state
+      ) do
+    Logger.error("[GameServer] Unhandled packet: #{inspect(packet, limit: :infinity)})}")
+    {:continue, state}
+  end
+
+  defp extract_username_with_rest(payload) do
     case :binary.match(payload, <<0>>) do
       {idx, _len} ->
         username = :binary.part(payload, 0, idx)
@@ -44,5 +92,36 @@ defmodule FragileWater.Game do
       :nomatch ->
         {payload, <<>>}
     end
+  end
+
+  defp build_packet(opcode, payload, crypt) do
+    size = byte_size(payload) + 2
+    header = <<size::big-size(16), opcode::little-size(16)>>
+
+    Logger.info(
+      "[GameServer] Encrypting header: #{inspect(header)} with crypt: #{inspect(crypt)}"
+    )
+
+    {encrypted_header, new_crypt} = encrypt_header(header, crypt)
+
+    Logger.info(
+      "[GameServer] Encrypted header: #{inspect(encrypted_header)} with new crypt: #{inspect(new_crypt)}"
+    )
+
+    {encrypted_header <> payload, new_crypt}
+  end
+
+  defp encrypt_header(header, state) do
+    acc = {<<>>, %{send_i: state.send_i, send_j: state.send_j}}
+
+    {header, crypt_state} =
+      Enum.reduce(:binary.bin_to_list(header), acc, fn byte, {header, crypt} ->
+        send_i = rem(crypt.send_i, byte_size(state.key))
+        x = bxor(byte, :binary.at(state.key, send_i)) + crypt.send_j
+        <<truncated_x>> = <<x::little-size(8)>>
+        {header <> <<truncated_x>>, %{send_i: send_i + 1, send_j: truncated_x}}
+      end)
+
+    {header, Map.merge(state, crypt_state)}
   end
 end
