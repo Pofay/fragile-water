@@ -52,7 +52,6 @@ defmodule FragileWater.Game do
         state.seed <>
         session
 
-    ## This is where I got it wrong, my byte size is 40 for my session.
     Logger.info("[GameServer]  Key size is: #{inspect(byte_size(session))}")
 
     server_proof = :crypto.hash(:sha, data)
@@ -60,7 +59,10 @@ defmodule FragileWater.Game do
     if client_proof == server_proof do
       Logger.info("[GameServer] Authentication Successful for #{username}")
 
-      crypt = %{key: session, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
+      # TBC/Wrath uses an HMAC1SHA for its World Encryption Key
+      # This definitely needs to be tracked by another Process/GenServer
+      world_key = create_tbc_key(session)
+      crypt = %{key: world_key, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
 
       {packet, crypt} =
         build_packet(0x1EE, <<0x0C::little-size(32), 0, 0::little-size(32)>>, crypt)
@@ -82,7 +84,7 @@ defmodule FragileWater.Game do
         state
       ) do
     Logger.error("[GameServer] Received OPCODE FOR CMSG_CHAR_ENUM: #{inspect(opcode)}")
-    {:close, state}
+    {:continue, state}
   end
 
   @impl ThousandIsland.Handler
@@ -136,5 +138,13 @@ defmodule FragileWater.Game do
       end)
 
     {header, Map.merge(state, crypt_state)}
+  end
+
+  defp create_tbc_key(session) do
+    s_key =
+      <<0x38, 0xA7, 0x83, 0x15, 0xF8, 0x92, 0x25, 0x30, 0x71, 0x98, 0x67, 0xB1, 0x8C, 0x4, 0xE2,
+        0xAA>>
+
+    :crypto.mac(:hmac, :sha, s_key, session)
   end
 end
