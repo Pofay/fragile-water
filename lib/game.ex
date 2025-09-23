@@ -128,6 +128,7 @@ defmodule FragileWater.Game do
     header = <<size::big-size(16), opcode::little-size(16)>>
     # TBC/Wrath uses an HMAC1SHA for its World Encryption Key
     # This definitely needs to be tracked by another Process/GenServer
+    # World key might work inside an ETS Storage
     world_key = create_tbc_key(crypt.key)
     tbc_crypt = %{crypt | key: world_key}
 
