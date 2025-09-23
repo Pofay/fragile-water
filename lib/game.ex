@@ -62,7 +62,11 @@ defmodule FragileWater.Game do
     if client_proof == server_proof do
       Logger.info("[GameServer] Authentication Successful for #{username}")
 
-      crypt = %{key: session, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
+      # TBC/Wrath uses an HMAC1SHA for its World Encryption Key
+      # This definitely needs to be tracked by another Process/GenServer
+      # World key might work inside an ETS Storage
+      world_key = create_tbc_key(session)
+      crypt = %{key: world_key, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
 
       {packet, crypt} =
         build_packet(0x1EE, <<0x0C::little-size(32), 0, 0::little-size(32)>>, crypt)
@@ -126,17 +130,12 @@ defmodule FragileWater.Game do
   defp build_packet(opcode, payload, crypt) do
     size = byte_size(payload) + 2
     header = <<size::big-size(16), opcode::little-size(16)>>
-    # TBC/Wrath uses an HMAC1SHA for its World Encryption Key
-    # This definitely needs to be tracked by another Process/GenServer
-    # World key might work inside an ETS Storage
-    world_key = create_tbc_key(crypt.key)
-    tbc_crypt = %{crypt | key: world_key}
 
     Logger.info(
-      "[GameServer] Encrypting header: #{inspect(header)} with crypt: #{inspect(tbc_crypt)}"
+      "[GameServer] Encrypting header: #{inspect(header)} with crypt: #{inspect(crypt)}"
     )
 
-    {encrypted_header, new_crypt} = encrypt_header(header, tbc_crypt)
+    {encrypted_header, new_crypt} = encrypt_header(header, crypt)
 
     Logger.info(
       "[GameServer] Encrypted header: #{inspect(encrypted_header)} with new crypt: #{inspect(new_crypt)}"
