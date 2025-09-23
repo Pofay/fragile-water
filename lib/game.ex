@@ -8,6 +8,9 @@ defmodule FragileWater.Game do
 
   @smsg_auth_challenge 0x1EC
 
+  @cmsg_char_enum 0x037
+  @smsg_char_enum 0x03B
+
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
     seed = :crypto.strong_rand_bytes(4)
@@ -76,11 +79,25 @@ defmodule FragileWater.Game do
 
   @impl ThousandIsland.Handler
   def handle_data(
-        <<_size::big-size(16), opcode::little-size(32)>>,
-        _socket,
+        <<header::bytes-size(6), _body::binary>>,
+        socket,
         state
       ) do
-    Logger.error("[GameServer] Received OPCODE FOR CMSG_CHAR_ENUM: #{inspect(opcode)}")
+    # Decrypt header and match to cmsg_char_enum
+    case decrypt_header(header, state.crypt) do
+      {<<_size::big-size(16), @cmsg_char_enum::little-size(32)>>, decrypted_state} ->
+        payload = <<0>>
+
+        {packet, _crypt} = build_packet(@smsg_char_enum, payload, decrypted_state)
+
+        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+
+        ThousandIsland.Socket.send(socket, packet)
+
+      other ->
+        Logger.error("[GameServer] Unknown decrypted header: #{inspect(other)}")
+    end
+
     {:continue, state}
   end
 
@@ -137,6 +154,25 @@ defmodule FragileWater.Game do
         <<truncated_x>> = <<x::little-size(8)>>
         {header <> <<truncated_x>>, %{send_i: send_i + 1, send_j: truncated_x}}
       end)
+
+    {header, Map.merge(state, crypt_state)}
+  end
+
+  defp decrypt_header(header, state) do
+    Logger.info("Crypt State: #{inspect(state)}")
+    acc = {<<>>, %{recv_i: state.recv_i, recv_j: state.recv_j}}
+
+    {header, crypt_state} =
+      Enum.reduce(
+        :binary.bin_to_list(header),
+        acc,
+        fn byte, {header, crypt} ->
+          recv_i = rem(crypt.recv_i, byte_size(state.key))
+          x = bxor(byte - crypt.recv_j, :binary.at(state.key, recv_i))
+          <<truncated_x>> = <<x::little-size(8)>>
+          {header <> <<truncated_x>>, %{recv_i: recv_i + 1, recv_j: byte}}
+        end
+      )
 
     {header, Map.merge(state, crypt_state)}
   end
