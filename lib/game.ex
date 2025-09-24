@@ -7,9 +7,12 @@ defmodule FragileWater.Game do
   alias FragileWater.SessionStorage
 
   @smsg_auth_challenge 0x1EC
+  @cmsg_auth_session 0x1ED
 
   @cmsg_char_enum 0x037
   @smsg_char_enum 0x03B
+
+  @smsg_auth_response 0x1EE
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -30,7 +33,7 @@ defmodule FragileWater.Game do
 
   @impl ThousandIsland.Handler
   def handle_data(
-        <<size::big-size(16), 0x1ED::little-size(32), body::binary-size(size - 4)>>,
+        <<size::big-size(16), @cmsg_auth_session::little-size(32), body::binary-size(size - 4)>>,
         socket,
         state
       ) do
@@ -69,7 +72,7 @@ defmodule FragileWater.Game do
       crypt = %{key: world_key, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
 
       {packet, crypt} =
-        build_packet(0x1EE, <<0x0C::little-size(32), 0, 0::little-size(32)>>, crypt)
+        build_packet(@smsg_auth_response, <<0x0C::little-size(32), 0, 0::little-size(32)>>, crypt)
 
       Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
 
