@@ -4,6 +4,7 @@ defmodule FragileWater.Game do
 
   import Bitwise, only: [bxor: 2]
 
+  alias FragileWater.CryptoSession
   alias FragileWater.SessionStorage
 
   @smsg_auth_challenge 0x1EC
@@ -70,6 +71,7 @@ defmodule FragileWater.Game do
       # World key might work inside an ETS Storage
       world_key = create_tbc_key(session)
       crypt = %{key: world_key, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
+      {:ok, crypto_pid} = CryptoSession.start_link(crypt)
 
       {packet, crypt} =
         build_packet(@smsg_auth_response, <<0x0C::little-size(32), 0, 0::little-size(32)>>, crypt)
@@ -77,7 +79,9 @@ defmodule FragileWater.Game do
       Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
 
       ThousandIsland.Socket.send(socket, packet)
-      {:continue, Map.merge(state, %{username: username, crypt: crypt})}
+
+      
+      {:continue, Map.merge(state, %{username: username, crypt_pid: crypto_pid})}
     else
       Logger.error("[GameServer] Authentication failed for #{username}")
       {:close, state}
@@ -95,7 +99,7 @@ defmodule FragileWater.Game do
       {<<_size::big-size(16), @cmsg_char_enum::little-size(32)>>, decrypted_state} ->
         payload = <<0>>
 
-        {packet, _crypt} = build_packet(@smsg_char_enum, payload, decrypted_state)
+        {packet, crypt} = build_packet(@smsg_char_enum, payload, decrypted_state)
 
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
 
