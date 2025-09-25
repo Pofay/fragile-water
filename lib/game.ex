@@ -99,30 +99,9 @@ defmodule FragileWater.Game do
         state
       ) do
     case decrypt_header(header, CryptoSession.get(state.crypto_pid)) do
-      {<<_size::big-size(16), @cmsg_char_enum::little-size(32)>>, crypt} ->
-        payload = <<0>>
+      {<<size::big-size(16), opcode::little-size(32)>>, crypt} ->
 
-        {packet, crypt} = build_packet(@smsg_char_enum, payload, crypt)
-        Logger.info("[GameServer] Crypto PID: #{inspect(state.crypto_pid)}")
-        CryptoSession.update(state.crypto_pid, crypt)
-
-        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
-
-        ThousandIsland.Socket.send(socket, packet)
-
-      {<<size::big-size(16), @cmsg_ping::little-size(32)>>, crypt} ->
-        <<sequence_id::little-size(32), latency::little-size(32)>> = body
-        payload = <<size, @smsg_pong::little-size(16), sequence_id>>
-        Logger.info("[GameServer] CSMG PING - sequence_id: #{sequence_id}, latency: #{latency}")
-
-        {packet, crypt} = build_packet(@smsg_char_enum, payload, crypt)
-        Logger.info("[GameServer] Crypto PID: #{inspect(state.crypto_pid)}")
-        CryptoSession.update(state.crypto_pid, crypt)
-
-        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
-
-        ThousandIsland.Socket.send(socket, packet)
-        {:continue, Map.merge(state, %{latency: latency})}
+        handle_world_packet(opcode, size, body, crypt, state, socket)
 
       other ->
         Logger.error("[GameServer] Unknown decrypted header: #{inspect(other)}")
@@ -150,6 +129,37 @@ defmodule FragileWater.Game do
 
       :nomatch ->
         {payload, <<>>}
+    end
+  end
+
+  defp handle_world_packet(opcode, size, body, crypt, state, socket) do
+    case opcode do
+      @cmsg_char_enum ->
+        payload = <<0>>
+        {packet, crypt} = build_packet(@smsg_char_enum, payload, crypt)
+        CryptoSession.update(state.crypto_pid, crypt)
+
+        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+
+        ThousandIsland.Socket.send(socket, packet)
+        {:continue, state}
+
+      @cmsg_ping ->
+        <<sequence_id::little-size(32), latency::little-size(32)>> = body
+        payload = <<size, @smsg_pong::little-size(16), sequence_id>>
+
+        {packet, crypt} = build_packet(@smsg_char_enum, payload, crypt)
+        CryptoSession.update(state.crypto_pid, crypt)
+
+        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+
+        ThousandIsland.Socket.send(socket, packet)
+
+        {:continue, Map.merge(state, %{latency: latency})}
+
+      _ ->
+        Logger.error("[GameServer] Unimplemented opcode: #{inspect(opcode, base: :hex)}")
+        {:continue, state}
     end
   end
 
