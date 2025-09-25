@@ -29,6 +29,7 @@ defmodule FragileWater.Game do
         opcode <>
         seed
 
+    Logger.info("[GameServer] SMSG_AUTH_CHALLENGE")
     Logger.info("[GameServer] Sending SMSG_AUTH_CHALLENGE with seed: #{inspect(seed)}")
 
     ThousandIsland.Socket.send(socket, packet)
@@ -41,6 +42,8 @@ defmodule FragileWater.Game do
         socket,
         state
       ) do
+    Logger.info("[GameServer] CMSG_AUTH_SESSION")
+
     <<build::little-size(32), server_id::little-size(32), rest::binary>> = body
     {username, additional_bits} = extract_username_with_rest(rest)
 
@@ -100,7 +103,6 @@ defmodule FragileWater.Game do
       ) do
     case decrypt_header(header, CryptoSession.get(state.crypto_pid)) do
       {<<size::big-size(16), opcode::little-size(32)>>, crypt} ->
-
         handle_world_packet(opcode, size, body, crypt, state, socket)
 
       other ->
@@ -135,6 +137,8 @@ defmodule FragileWater.Game do
   defp handle_world_packet(opcode, size, body, crypt, state, socket) do
     case opcode do
       @cmsg_char_enum ->
+        Logger.info("[GameServer] CMSG_CHAR_ENUM")
+
         payload = <<0>>
         {packet, crypt} = build_packet(@smsg_char_enum, payload, crypt)
         CryptoSession.update(state.crypto_pid, crypt)
@@ -145,6 +149,8 @@ defmodule FragileWater.Game do
         {:continue, state}
 
       @cmsg_ping ->
+        Logger.info("[GameServer] CMSG_PING")
+
         <<sequence_id::little-size(32), latency::little-size(32)>> = body
         payload = <<size, @smsg_pong::little-size(16), sequence_id>>
 
