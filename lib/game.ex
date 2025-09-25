@@ -72,16 +72,17 @@ defmodule FragileWater.Game do
       world_key = create_tbc_key(session)
       crypt = %{key: world_key, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
       {:ok, crypto_pid} = CryptoSession.start_link(crypt)
+      Logger.info("[GameServer] Crypto PID: #{inspect(crypto_pid)}")
 
       {packet, crypt} =
         build_packet(@smsg_auth_response, <<0x0C::little-size(32), 0, 0::little-size(32)>>, crypt)
 
+      CryptoSession.update(crypto_pid, crypt)
+
       Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
 
       ThousandIsland.Socket.send(socket, packet)
-
-      
-      {:continue, Map.merge(state, %{username: username, crypt_pid: crypto_pid})}
+      {:continue, Map.merge(state, %{username: username, crypto_pid: crypto_pid})}
     else
       Logger.error("[GameServer] Authentication failed for #{username}")
       {:close, state}
@@ -95,11 +96,13 @@ defmodule FragileWater.Game do
         state
       ) do
     # Decrypt header and match to cmsg_char_enum
-    case decrypt_header(header, state.crypt) do
-      {<<_size::big-size(16), @cmsg_char_enum::little-size(32)>>, decrypted_state} ->
+    case decrypt_header(header, CryptoSession.get(state.crypto_pid)) do
+      {<<_size::big-size(16), @cmsg_char_enum::little-size(32)>>, crypt} ->
         payload = <<0>>
 
-        {packet, crypt} = build_packet(@smsg_char_enum, payload, decrypted_state)
+        {packet, crypt} = build_packet(@smsg_char_enum, payload, crypt)
+        Logger.info("[GameServer] Crypto PID: #{inspect(state.crypto_pid)}")
+        CryptoSession.update(state.crypto_pid, crypt)
 
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
 
@@ -166,7 +169,6 @@ defmodule FragileWater.Game do
   end
 
   defp decrypt_header(header, state) do
-    Logger.info("Crypt State: #{inspect(state)}")
     acc = {<<>>, %{recv_i: state.recv_i, recv_j: state.recv_j}}
 
     {header, crypt_state} =
