@@ -15,6 +15,9 @@ defmodule FragileWater.Game do
 
   @smsg_auth_response 0x1EE
 
+  @cmsg_ping 0x1DC
+  @smsg_pong 0x1DD
+
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
     seed = :crypto.strong_rand_bytes(4)
@@ -91,11 +94,10 @@ defmodule FragileWater.Game do
 
   @impl ThousandIsland.Handler
   def handle_data(
-        <<header::bytes-size(6), _body::binary>>,
+        <<header::bytes-size(6), body::binary>>,
         socket,
         state
       ) do
-    # Decrypt header and match to cmsg_char_enum
     case decrypt_header(header, CryptoSession.get(state.crypto_pid)) do
       {<<_size::big-size(16), @cmsg_char_enum::little-size(32)>>, crypt} ->
         payload = <<0>>
@@ -107,6 +109,20 @@ defmodule FragileWater.Game do
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
 
         ThousandIsland.Socket.send(socket, packet)
+
+      {<<size::big-size(16), @cmsg_ping::little-size(32)>>, crypt} ->
+        <<sequence_id::little-size(32), latency::little-size(32)>> = body
+        payload = <<size, @smsg_pong::little-size(16), sequence_id>>
+        Logger.info("[GameServer] CSMG PING - sequence_id: #{sequence_id}, latency: #{latency}")
+
+        {packet, crypt} = build_packet(@smsg_char_enum, payload, crypt)
+        Logger.info("[GameServer] Crypto PID: #{inspect(state.crypto_pid)}")
+        CryptoSession.update(state.crypto_pid, crypt)
+
+        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+
+        ThousandIsland.Socket.send(socket, packet)
+        {:continue, Map.merge(state, %{latency: latency})}
 
       other ->
         Logger.error("[GameServer] Unknown decrypted header: #{inspect(other)}")
