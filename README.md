@@ -1,14 +1,11 @@
 # FragileWater
 
-This Elixir Project is my follow along of [Pikdum's](https://github.com/pikdum) Elixir implementation of his [Thistle Tea Wow Server](https://github.com/pikdum/thistle_tea) from these sources:
+This is my attempt at implementing/reverese-engineering a WoW TBC Server in Elixir. I've mostly followed the implementations from these sources with some changes to handle TBC specific packet payloads:
 
-- [Pikdum's Blog](https://pikdum.dev/)
-- Github commits
-
-Like him I want to learn more about Elixir and its ecosystem and experiment with the language.
-
-Instead of using the original [MangosZero](https://github.com/mangoszero) I opted to use [CMangos](https://github.com/cmangos) specifically its [Burning Crusade expansion](https://github.com/cmangos/mangos-tbc) since it was easier to setup.
-
+- [Thistle Tea](https://github.com/pikdum/thistle_tea)
+- [Shadowburn Project](https://gitlab.com/shadowburn/shadowburn)
+- [Gtker's Blog](https://gtker.com/implementation-guide-for-the-world-of-warcraft-flavor-of-srp6/)
+- [WowDev](https://wowdev.wiki/Login_Packet)
 
 ## Installation
 
