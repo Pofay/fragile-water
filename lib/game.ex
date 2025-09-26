@@ -51,7 +51,7 @@ defmodule FragileWater.Game do
     Logger.info("[GameServer] CMSG_AUTH_SESSION")
 
     <<build::little-size(32), server_id::little-size(32), rest::binary>> = body
-    {username, additional_bits} = extract_username_with_rest(rest)
+    {username, additional_bits} = extract_name_with_rest(rest)
 
     <<client_seed::little-bytes-size(4), client_proof::little-bytes-size(20), _bits::binary>> =
       additional_bits
@@ -128,12 +128,12 @@ defmodule FragileWater.Game do
     {:continue, state}
   end
 
-  defp extract_username_with_rest(payload) do
+  defp extract_name_with_rest(payload) do
     case :binary.match(payload, <<0>>) do
       {idx, _len} ->
-        username = :binary.part(payload, 0, idx)
+        name = :binary.part(payload, 0, idx)
         rest = :binary.part(payload, idx + 1, byte_size(payload) - (idx + 1))
-        {username, rest}
+        {name , rest}
 
       :nomatch ->
         {payload, <<>>}
@@ -153,6 +153,14 @@ defmodule FragileWater.Game do
 
         ThousandIsland.Socket.send(socket, packet)
         {:continue, state}
+
+      @cmsg_char_create ->
+        Logger.info("[GameServer] CMSG_CHAR_CREATE")
+
+        # {character_name, char_rest } = extract_name_with_rest(body)
+        # <<race::little-size(8), class::little-size(8), gender::little-size(8), >>
+
+
 
       @cmsg_ping ->
         Logger.info("[GameServer] CMSG_PING")
