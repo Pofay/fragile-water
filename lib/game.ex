@@ -21,6 +21,9 @@ defmodule FragileWater.Game do
   @cmsg_realm_split 0x38C
   @smsg_realm_split 0x38B
 
+  @cmsg_char_create 0x036
+  @smsg_char_create 0x03A
+
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
     seed = :crypto.strong_rand_bytes(4)
@@ -169,8 +172,14 @@ defmodule FragileWater.Game do
       @cmsg_realm_split ->
         Logger.info("[GameServer] CMSG_REALM_SPLIT")
 
-        split_date = "01/01/01"
-        payload = <<0::little-size(32), 0::little-size(32)>> <> split_date
+        <<unk::little-unsigned-integer-size(32), _rest::binary>> = body
+        split_date = "01/01/01" <> <<0>>
+        realm_split_state = 0
+
+        payload =
+          <<unk::little-unsigned-integer-size(32)>> <>
+            <<realm_split_state::little-unsigned-integer-size(32)>> <>
+            split_date
 
         {packet, crypt} = build_packet(@smsg_realm_split, payload, crypt)
         CryptoSession.update(state.crypto_pid, crypt)
