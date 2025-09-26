@@ -18,6 +18,9 @@ defmodule FragileWater.Game do
   @cmsg_ping 0x1DC
   @smsg_pong 0x1DD
 
+  @cmsg_realm_split 0x38C
+  @smsg_realm_split 0x38B
+
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
     seed = :crypto.strong_rand_bytes(4)
@@ -162,6 +165,20 @@ defmodule FragileWater.Game do
         ThousandIsland.Socket.send(socket, packet)
 
         {:continue, Map.merge(state, %{latency: latency})}
+
+      @cmsg_realm_split ->
+        Logger.info("[GameServer] CMSG_REALM_SPLIT")
+
+        split_date = "01/01/01"
+        payload = <<0::little-size(32), 0::little-size(32)>> <> split_date
+
+        {packet, crypt} = build_packet(@smsg_realm_split, payload, crypt)
+        CryptoSession.update(state.crypto_pid, crypt)
+
+        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+
+        ThousandIsland.Socket.send(socket, packet)
+        {:continue, state}
 
       _ ->
         Logger.error("[GameServer] Unimplemented opcode: #{inspect(opcode, base: :hex)}")
