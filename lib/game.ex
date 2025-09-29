@@ -133,7 +133,7 @@ defmodule FragileWater.Game do
       {idx, _len} ->
         name = :binary.part(payload, 0, idx)
         rest = :binary.part(payload, idx + 1, byte_size(payload) - (idx + 1))
-        {name , rest}
+        {name, rest}
 
       :nomatch ->
         {payload, <<>>}
@@ -157,10 +157,8 @@ defmodule FragileWater.Game do
       @cmsg_char_create ->
         Logger.info("[GameServer] CMSG_CHAR_CREATE")
 
-        # {character_name, char_rest } = extract_name_with_rest(body)
-        # <<race::little-size(8), class::little-size(8), gender::little-size(8), >>
-
-
+      # {character_name, char_rest } = extract_name_with_rest(body)
+      # <<race::little-size(8), class::little-size(8), gender::little-size(8), >>
 
       @cmsg_ping ->
         Logger.info("[GameServer] CMSG_PING")
