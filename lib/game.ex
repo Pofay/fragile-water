@@ -2,11 +2,10 @@ defmodule FragileWater.Game do
   use ThousandIsland.Handler
   require Logger
 
-  import Bitwise, only: [bxor: 2]
-
   alias FragileWater.CryptoSession
   alias FragileWater.SessionStorage
   alias FragileWater.CharacterStorage
+  alias FragileWater.Encryption
 
   @smsg_auth_challenge 0x1EC
   @cmsg_auth_session 0x1ED
@@ -82,13 +81,17 @@ defmodule FragileWater.Game do
       # TBC/Wrath uses an HMAC1SHA for its World Encryption Key
       # This definitely needs to be tracked by another Process/GenServer
       # World key might work inside an ETS Storage
-      world_key = create_tbc_key(session)
+      world_key = Encryption.create_tbc_key(session)
       crypt = %{key: world_key, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
       {:ok, crypto_pid} = CryptoSession.start_link(crypt)
       Logger.info("[GameServer] Crypto PID: #{inspect(crypto_pid)}")
 
       {packet, crypt} =
-        build_packet(@smsg_auth_response, <<0x0C::little-size(32), 0, 0::little-size(32)>>, crypt)
+        Encryption.build_packet(
+          @smsg_auth_response,
+          <<0x0C::little-size(32), 0, 0::little-size(32)>>,
+          crypt
+        )
 
       CryptoSession.update(crypto_pid, crypt)
 
@@ -108,7 +111,7 @@ defmodule FragileWater.Game do
         socket,
         state
       ) do
-    case decrypt_header(header, CryptoSession.get(state.crypto_pid)) do
+    case Encryption.decrypt_header(header, CryptoSession.get(state.crypto_pid)) do
       {<<size::big-size(16), opcode::little-size(32)>>, crypt} ->
         handle_world_packet(opcode, size, body, crypt, state, socket)
 
@@ -149,9 +152,10 @@ defmodule FragileWater.Game do
         {_username, characters} = CharacterStorage.get_characters(state.username)
         length = Enum.count(characters)
 
-        Logger.info("[GameServer] Characters: #{inspect(characters)}")
-
-        characters_payload = Enum.map(characters, &build_character_enum_data(&1))
+        characters_payload =
+          Enum.map(characters, fn c ->
+            build_character_enum_data(c)
+          end)
 
         payload =
           case length do
@@ -159,18 +163,8 @@ defmodule FragileWater.Game do
             _ -> <<length>> <> Enum.join(characters_payload)
           end
 
-        Logger.info(
-          "[GameServer] Number of Characters for #{state.username}: #{Enum.count(characters)}"
-        )
-
-        Enum.each(characters, fn c ->
-          Logger.info("[GameServer] Character name: #{c.name}")
-        end)
-
-        {packet, crypt} = build_packet(@smsg_char_enum, payload, crypt)
+        {packet, crypt} = Encryption.build_packet(@smsg_char_enum, <<0>>, crypt)
         CryptoSession.update(state.crypto_pid, crypt)
-        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
-
         ThousandIsland.Socket.send(socket, packet)
         {:continue, state}
 
@@ -180,7 +174,7 @@ defmodule FragileWater.Game do
         <<sequence_id::little-size(32), latency::little-size(32)>> = body
         payload = <<size, @smsg_pong::little-size(16), sequence_id>>
 
-        {packet, crypt} = build_packet(@smsg_char_enum, payload, crypt)
+        {packet, crypt} = Encryption.build_packet(@smsg_char_enum, payload, crypt)
         CryptoSession.update(state.crypto_pid, crypt)
 
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
@@ -198,7 +192,7 @@ defmodule FragileWater.Game do
           char_rest
 
         character = %{
-          guid: :binary.decode_unsigned(:crypto.strong_rand_bytes(64)),
+          guid: :binary.decode_unsigned(:crypto.strong_rand_bytes(8)),
           name: character_name,
           race: race,
           class: class,
@@ -210,7 +204,9 @@ defmodule FragileWater.Game do
           facial_hair: facial_hair,
           outfit_id: outfit_id,
           level: 1,
+          # Elwynn Forest
           area: 85,
+          # Eastern Kingdoms
           map: 0,
           x: 1676.71,
           y: 1678.31,
@@ -221,11 +217,10 @@ defmodule FragileWater.Game do
         Logger.info("[GameServer] Character Created: #{inspect(character, limit: :infinity)}")
 
         CharacterStorage.add_character(state.username, character)
-        {packet, crypt} = build_packet(@smsg_char_create, <<0x2F>>, crypt)
+        {packet, crypt} = Encryption.build_packet(@smsg_char_create, <<0x2F>>, crypt)
         CryptoSession.update(state.crypto_pid, crypt)
 
         ThousandIsland.Socket.send(socket, packet)
-
         {:continue, state}
 
       @cmsg_realm_split ->
@@ -240,7 +235,7 @@ defmodule FragileWater.Game do
             <<realm_split_state::little-unsigned-integer-size(32)>> <>
             split_date
 
-        {packet, crypt} = build_packet(@smsg_realm_split, payload, crypt)
+        {packet, crypt} = Encryption.build_packet(@smsg_realm_split, payload, crypt)
         CryptoSession.update(state.crypto_pid, crypt)
 
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
@@ -325,62 +320,5 @@ defmodule FragileWater.Game do
       pet_level <>
       pet_family <>
       equipment_cache
-  end
-
-  defp build_packet(opcode, payload, crypt) do
-    size = byte_size(payload) + 2
-    header = <<size::big-size(16), opcode::little-size(16)>>
-
-    Logger.info(
-      "[GameServer] Encrypting header: #{inspect(header)} with crypt: #{inspect(crypt)}"
-    )
-
-    {encrypted_header, new_crypt} = encrypt_header(header, crypt)
-
-    Logger.info(
-      "[GameServer] Encrypted header: #{inspect(encrypted_header)} with new crypt: #{inspect(new_crypt)}"
-    )
-
-    {encrypted_header <> payload, new_crypt}
-  end
-
-  defp encrypt_header(header, state) do
-    acc = {<<>>, %{send_i: state.send_i, send_j: state.send_j}}
-
-    {header, crypt_state} =
-      Enum.reduce(:binary.bin_to_list(header), acc, fn byte, {header, crypt} ->
-        send_i = rem(crypt.send_i, byte_size(state.key))
-        x = bxor(byte, :binary.at(state.key, send_i)) + crypt.send_j
-        <<truncated_x>> = <<x::little-size(8)>>
-        {header <> <<truncated_x>>, %{send_i: send_i + 1, send_j: truncated_x}}
-      end)
-
-    {header, Map.merge(state, crypt_state)}
-  end
-
-  defp decrypt_header(header, state) do
-    acc = {<<>>, %{recv_i: state.recv_i, recv_j: state.recv_j}}
-
-    {header, crypt_state} =
-      Enum.reduce(
-        :binary.bin_to_list(header),
-        acc,
-        fn byte, {header, crypt} ->
-          recv_i = rem(crypt.recv_i, byte_size(state.key))
-          x = bxor(byte - crypt.recv_j, :binary.at(state.key, recv_i))
-          <<truncated_x>> = <<x::little-size(8)>>
-          {header <> <<truncated_x>>, %{recv_i: recv_i + 1, recv_j: byte}}
-        end
-      )
-
-    {header, Map.merge(state, crypt_state)}
-  end
-
-  defp create_tbc_key(session) do
-    s_key =
-      <<0x38, 0xA7, 0x83, 0x15, 0xF8, 0x92, 0x25, 0x30, 0x71, 0x98, 0x67, 0xB1, 0x8C, 0x4, 0xE2,
-        0xAA>>
-
-    :crypto.mac(:hmac, :sha, s_key, session)
   end
 end
