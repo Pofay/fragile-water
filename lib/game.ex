@@ -155,9 +155,7 @@ defmodule FragileWater.Game do
         Logger.info("[GameServer] CMSG_CHAR_ENUM Number of Characters: #{inspect(length)}")
 
         characters_payload =
-          Enum.map(characters, fn c ->
-            build_character_enum_data(c)
-          end)
+          Enum.map(characters, &build_character_enum_data(&1))
 
         payload =
           case length do
@@ -165,10 +163,11 @@ defmodule FragileWater.Game do
             _ -> <<length>> <> Enum.join(characters_payload)
           end
 
-        Logger.info("[GameServer] CMSG_CHAR_ENUM payload: #{inspect(payload)}")
-
         {packet, crypt} = Encryption.build_packet(@smsg_char_enum, payload, crypt)
         CryptoSession.update(state.crypto_pid, crypt)
+
+        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+
         ThousandIsland.Socket.send(socket, packet)
         {:continue, state}
 
@@ -192,7 +191,7 @@ defmodule FragileWater.Game do
       @cmsg_char_create ->
         Logger.info("[GameServer] CMSG_CHAR_CREATE")
 
-        character_data = parse_char_create_packet(body)
+        character_data = parse_char_create_body(body)
 
         character = %{
           guid: :binary.decode_unsigned(:crypto.strong_rand_bytes(64)),
@@ -205,6 +204,7 @@ defmodule FragileWater.Game do
           hair_style: character_data.hair_style,
           hair_color: character_data.hair_color,
           facial_hair: character_data.facial_hair,
+          outfit_id: character_data.outfit_id,
           level: 1,
           area: 85,
           map: 0,
@@ -219,6 +219,8 @@ defmodule FragileWater.Game do
         CharacterStorage.add_character(state.username, character)
         {packet, crypt} = Encryption.build_packet(@smsg_char_create, <<0x2F>>, crypt)
         CryptoSession.update(state.crypto_pid, crypt)
+
+        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
 
         ThousandIsland.Socket.send(socket, packet)
         {:continue, state}
@@ -249,12 +251,12 @@ defmodule FragileWater.Game do
     end
   end
 
-  defp parse_char_create_packet(body) do
+  defp parse_char_create_body(body) do
     {name, rest} = extract_name_with_rest(body)
 
-    # Extract 9 bytes of character data (like Python's unpack('<9B'))
-    <<race, char_class, gender, skin, face, hair_style, hair_color, facial_hair, _outfit_id,
-      _rest::binary>> = rest
+    <<race, char_class, gender, skin, face, hair_style, hair_color, facial_hair, outfit_id,
+      _rest::binary>> =
+      rest
 
     %{
       name: name,
@@ -265,80 +267,56 @@ defmodule FragileWater.Game do
       face: face,
       hair_style: hair_style,
       hair_color: hair_color,
-      facial_hair: facial_hair
+      facial_hair: facial_hair,
+      outfit_id: outfit_id
     }
   end
 
   defp build_character_enum_data(character) do
-    # GUID (8 bytes)
-    guid_bytes = <<character.guid::little-size(64)>>
+    # From https://gtker.com/wow_messages/docs/smsg_char_enum.html#client-version-243
+    # https://github.com/gtker/wow_messages/blob/main/wow_message_parser/wowm/world/character_screen/smsg_char_enum_2_4_3.wowm#L3
 
-    # Name (null-terminated string)
-    name_bytes = character.name <> <<0>>
-
-    # Basic character info
-    race_class_gender = <<character.race, character.class, character.gender>>
-
-    # Player bytes (skin, face, hair style, hair color combined)
-    player_bytes = <<character.skin, character.face, character.hair_style, character.hair_color>>
-
-    # Player bytes2 (facial hair, bank slots, etc.)
-    # facial_hair + 3 padding bytes
-    player_bytes2 = <<character.facial_hair, 0, 0, 0>>
-
-    # Level
-    level_bytes = <<character.level>>
-
-    # Zone ID (4 bytes)
-    zone_bytes = <<character.area::little-size(32)>>
-
-    # Map ID (4 bytes)
-    map_bytes = <<character.map::little-size(32)>>
-
-    # Position (3 floats, 4 bytes each)
-    position_bytes =
-      <<character.x::little-float-size(32)>> <>
+    character_data =
+      <<character.guid::little-size(64)>> <>
+        (character.name <> <<0>>) <>
+        <<character.race, character.class, character.gender>> <>
+        <<character.skin, character.face, character.hair_style, character.hair_color,
+          character.facial_hair,
+          character.outfit_id>> <>
+        <<character.level>> <>
+        <<character.area::little-size(32)>> <>
+        <<character.map::little-size(32)>> <>
+        <<character.x::little-float-size(32)>> <>
         <<character.y::little-float-size(32)>> <>
-        <<character.z::little-float-size(32)>>
+        <<character.z::little-float-size(32)>> <>
+        <<0::little-size(32)>> <>
+        <<0::little-size(32)>> <>
+        <<0>> <>
+        <<0::little-size(32)>> <>
+        <<0::little-size(32)>> <>
+        <<0::little-size(32)>>
 
-    # Guild ID (4 bytes) - 0 if no guild
-    guild_bytes = <<0::little-size(32)>>
+    equipment_data = build_tbc_equipment()
 
-    # Player flags (4 bytes)
-    flags_bytes = <<0::little-size(32)>>
+    final_data = character_data <> equipment_data
 
-    # At login flags (4 bytes)
-    at_login_bytes = 0
+    final_data
+  end
 
-    # Pet info (12 bytes total)
-    # 4 bytes
-    pet_display_id = <<0::little-size(32)>>
-    # 4 bytes
-    pet_level = <<0::little-size(32)>>
-    # 4 bytes
-    pet_family = <<0::little-size(32)>>
+  defp build_tbc_equipment() do
+    # TBC has enchantment value
+    # Vanilla includes Bag data
+    # At https://github.com/gtker/wow_messages/blob/main/wow_message_parser/wowm/world/character_screen/smsg_char_enum_2_4_3.wowm#L3
 
-    # Equipment cache - this is complex, for now send empty (19 * 8 = 152 bytes)
-    # Each equipment slot needs: item_id(4) + display_id(4) = 8 bytes
-    # 19 equipment slots total
-    equipment_cache = String.duplicate(<<0>>, 152)
+    equipment_slots =
+      Enum.map(0..19, fn _slot ->
+        <<0::little-size(32)>> <>
+          <<0>> <>
+          <<0::little-size(32)>>
+      end)
 
-    # Combine all parts
-    guid_bytes <>
-      name_bytes <>
-      race_class_gender <>
-      player_bytes <>
-      player_bytes2 <>
-      level_bytes <>
-      zone_bytes <>
-      map_bytes <>
-      position_bytes <>
-      guild_bytes <>
-      flags_bytes <>
-      at_login_bytes <>
-      pet_display_id <>
-      pet_level <>
-      pet_family <>
-      equipment_cache
+    equipment_data = Enum.join(equipment_slots)
+
+    equipment_data
   end
 end
