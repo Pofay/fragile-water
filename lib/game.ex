@@ -281,8 +281,7 @@ defmodule FragileWater.Game do
         (character.name <> <<0>>) <>
         <<character.race, character.class, character.gender>> <>
         <<character.skin, character.face, character.hair_style, character.hair_color,
-          character.facial_hair,
-          character.outfit_id>> <>
+          character.facial_hair>> <>
         <<character.level>> <>
         <<character.area::little-size(32)>> <>
         <<character.map::little-size(32)>> <>
