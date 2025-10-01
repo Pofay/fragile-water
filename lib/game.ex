@@ -71,8 +71,6 @@ defmodule FragileWater.Game do
         state.seed <>
         session
 
-    Logger.info("[GameServer]  Key size is: #{inspect(byte_size(session))}")
-
     server_proof = :crypto.hash(:sha, data)
 
     if client_proof == server_proof do
@@ -82,6 +80,8 @@ defmodule FragileWater.Game do
       # This definitely needs to be tracked by another Process/GenServer
       # World key might work inside an ETS Storage
       world_key = Encryption.create_tbc_key(session)
+      Logger.info("[GameServer] Key size for TBC is: #{inspect(byte_size(world_key))}")
+
       crypt = %{key: world_key, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
       {:ok, crypto_pid} = CryptoSession.start_link(crypt)
       Logger.info("[GameServer] Crypto PID: #{inspect(crypto_pid)}")
@@ -152,6 +152,8 @@ defmodule FragileWater.Game do
         {_username, characters} = CharacterStorage.get_characters(state.username)
         length = Enum.count(characters)
 
+        Logger.info("[GameServer] CMSG_CHAR_ENUM Number of Characters: #{inspect(length)}")
+
         characters_payload =
           Enum.map(characters, fn c ->
             build_character_enum_data(c)
@@ -163,7 +165,9 @@ defmodule FragileWater.Game do
             _ -> <<length>> <> Enum.join(characters_payload)
           end
 
-        {packet, crypt} = Encryption.build_packet(@smsg_char_enum, <<0>>, crypt)
+        Logger.info("[GameServer] CMSG_CHAR_ENUM payload: #{inspect(payload)}")
+
+        {packet, crypt} = Encryption.build_packet(@smsg_char_enum, payload, crypt)
         CryptoSession.update(state.crypto_pid, crypt)
         ThousandIsland.Socket.send(socket, packet)
         {:continue, state}
@@ -172,9 +176,11 @@ defmodule FragileWater.Game do
         Logger.info("[GameServer] CMSG_PING")
 
         <<sequence_id::little-size(32), latency::little-size(32)>> = body
-        payload = <<size, @smsg_pong::little-size(16), sequence_id>>
+        Logger.info("[GameServer] CMSG_PING: sequence_id: #{sequence_id}, latency: #{latency}")
 
-        {packet, crypt} = Encryption.build_packet(@smsg_char_enum, payload, crypt)
+        {packet, crypt} =
+          Encryption.build_packet(@smsg_pong, <<sequence_id::little-size(32)>>, crypt)
+
         CryptoSession.update(state.crypto_pid, crypt)
 
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
@@ -186,27 +192,21 @@ defmodule FragileWater.Game do
       @cmsg_char_create ->
         Logger.info("[GameServer] CMSG_CHAR_CREATE")
 
-        {character_name, char_rest} = extract_name_with_rest(body)
-
-        <<race, class, gender, skin, face, hair_style, hair_color, facial_hair, outfit_id>> =
-          char_rest
+        character_data = parse_char_create_packet(body)
 
         character = %{
-          guid: :binary.decode_unsigned(:crypto.strong_rand_bytes(8)),
-          name: character_name,
-          race: race,
-          class: class,
-          gender: gender,
-          skin: skin,
-          face: face,
-          hair_style: hair_style,
-          hair_color: hair_color,
-          facial_hair: facial_hair,
-          outfit_id: outfit_id,
+          guid: :binary.decode_unsigned(:crypto.strong_rand_bytes(64)),
+          name: character_data.name,
+          race: character_data.race,
+          class: character_data.char_class,
+          gender: character_data.gender,
+          skin: character_data.skin,
+          face: character_data.face,
+          hair_style: character_data.hair_style,
+          hair_color: character_data.hair_color,
+          facial_hair: character_data.facial_hair,
           level: 1,
-          # Elwynn Forest
           area: 85,
-          # Eastern Kingdoms
           map: 0,
           x: 1676.71,
           y: 1678.31,
@@ -249,6 +249,26 @@ defmodule FragileWater.Game do
     end
   end
 
+  defp parse_char_create_packet(body) do
+    {name, rest} = extract_name_with_rest(body)
+
+    # Extract 9 bytes of character data (like Python's unpack('<9B'))
+    <<race, char_class, gender, skin, face, hair_style, hair_color, facial_hair, _outfit_id,
+      _rest::binary>> = rest
+
+    %{
+      name: name,
+      race: race,
+      char_class: char_class,
+      gender: gender,
+      skin: skin,
+      face: face,
+      hair_style: hair_style,
+      hair_color: hair_color,
+      facial_hair: facial_hair
+    }
+  end
+
   defp build_character_enum_data(character) do
     # GUID (8 bytes)
     guid_bytes = <<character.guid::little-size(64)>>
@@ -288,7 +308,7 @@ defmodule FragileWater.Game do
     flags_bytes = <<0::little-size(32)>>
 
     # At login flags (4 bytes)
-    at_login_bytes = <<0::little-size(32)>>
+    at_login_bytes = 0
 
     # Pet info (12 bytes total)
     # 4 bytes
