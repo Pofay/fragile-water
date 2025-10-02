@@ -76,9 +76,6 @@ defmodule FragileWater.Game do
     if client_proof == server_proof do
       Logger.info("[GameServer] Authentication Successful for #{username}")
 
-      # TBC/Wrath uses an HMAC1SHA for its World Encryption Key
-      # This definitely needs to be tracked by another Process/GenServer
-      # World key might work inside an ETS Storage
       world_key = Encryption.create_tbc_key(session)
       Logger.info("[GameServer] Key size for TBC is: #{inspect(byte_size(world_key))}")
 
@@ -86,10 +83,18 @@ defmodule FragileWater.Game do
       {:ok, crypto_pid} = CryptoSession.start_link(crypt)
       Logger.info("[GameServer] Crypto PID: #{inspect(crypto_pid)}")
 
+      # From https://gtker.com/wow_messages/docs/smsg_auth_response.html#client-version-243
+      payload =
+        <<0x0C::little-size(32)>> <>
+          <<0>> <>
+          <<0::little-size(32)>> <>
+          <<0>> <>
+          <<1>>
+
       {packet, crypt} =
         Encryption.build_packet(
           @smsg_auth_response,
-          <<0x0C::little-size(32), 0, 0::little-size(32)>>,
+          payload,
           crypt
         )
 
