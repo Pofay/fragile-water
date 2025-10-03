@@ -219,10 +219,8 @@ defmodule FragileWater.Game do
           orientation: 2.7056
         }
 
-        Logger.info("[GameServer] Character Created: #{inspect(character, limit: :infinity)}")
-
-        CharacterStorage.add_character(state.username, character)
-        {packet, crypt} = Encryption.build_packet(@smsg_char_create, <<0x2F>>, crypt)
+        {_status, payload} = CharacterStorage.add_character(state.username, character)
+        {packet, crypt} = Encryption.build_packet(@smsg_char_create, <<payload>>, crypt)
         CryptoSession.update(state.crypto_pid, crypt)
 
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
