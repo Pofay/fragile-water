@@ -5,6 +5,7 @@ This is my attempt at implementing/reverese-engineering a WoW TBC Server in Elix
 - [Thistle Tea](https://github.com/pikdum/thistle_tea)
 - [Shadowburn Project](https://gitlab.com/shadowburn/shadowburn)
 - [Gtker's Blog](https://gtker.com/implementation-guide-for-the-world-of-warcraft-flavor-of-srp6/)
+- [WoWM Packet Structure Documentation](https://gtker.com/wow_messages/introduction.html)
 - [WowDev](https://wowdev.wiki/Login_Packet)
 
 ## Installation
