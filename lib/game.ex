@@ -118,7 +118,8 @@ defmodule FragileWater.Game do
       ) do
     case Encryption.decrypt_header(header, CryptoSession.get(state.crypto_pid)) do
       {<<size::big-size(16), opcode::little-size(32)>>, crypt} ->
-        handle_world_packet(opcode, size, body, crypt, state, socket)
+        CryptoSession.update(state.crypto_pid, crypt)
+        handle_world_packet(opcode, size, body, state, socket)
 
       other ->
         Logger.error("[GameServer] Unknown decrypted header: #{inspect(other)}")
@@ -149,7 +150,7 @@ defmodule FragileWater.Game do
     end
   end
 
-  defp handle_world_packet(opcode, size, body, crypt, state, socket) do
+  defp handle_world_packet(opcode, size, body, state, socket) do
     case opcode do
       @cmsg_char_enum ->
         Logger.info("[GameServer] CMSG_CHAR_ENUM")
@@ -168,12 +169,16 @@ defmodule FragileWater.Game do
             _ -> <<length>> <> Enum.join(characters_payload)
           end
 
-        {packet, crypt} = Encryption.build_packet(@smsg_char_enum, payload, crypt)
-        CryptoSession.update(state.crypto_pid, crypt)
+        packet =
+          CryptoSession.send_packet_and_update_state(
+            state.crypto_pid,
+            socket,
+            @smsg_char_enum,
+            payload
+          )
 
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
 
-        ThousandIsland.Socket.send(socket, packet)
         {:continue, state}
 
       @cmsg_ping ->
@@ -182,14 +187,17 @@ defmodule FragileWater.Game do
         <<sequence_id::little-size(32), latency::little-size(32)>> = body
         Logger.info("[GameServer] CMSG_PING: sequence_id: #{sequence_id}, latency: #{latency}")
 
-        {packet, crypt} =
-          Encryption.build_packet(@smsg_pong, <<sequence_id::little-size(32)>>, crypt)
+        payload = <<sequence_id::little-size(32)>>
 
-        CryptoSession.update(state.crypto_pid, crypt)
+        packet =
+          CryptoSession.send_packet_and_update_state(
+            state.crypto_pid,
+            socket,
+            @smsg_pong,
+            payload
+          )
 
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
-
-        ThousandIsland.Socket.send(socket, packet)
 
         {:continue, Map.merge(state, %{latency: latency})}
 
@@ -220,12 +228,17 @@ defmodule FragileWater.Game do
         }
 
         {_status, payload} = CharacterStorage.add_character(state.username, character)
-        {packet, crypt} = Encryption.build_packet(@smsg_char_create, <<payload>>, crypt)
-        CryptoSession.update(state.crypto_pid, crypt)
+
+        packet =
+          CryptoSession.send_packet_and_update_state(
+            state.crypto_pid,
+            socket,
+            @smsg_char_create,
+            <<payload>>
+          )
 
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
 
-        ThousandIsland.Socket.send(socket, packet)
         {:continue, state}
 
       @cmsg_realm_split ->
@@ -240,12 +253,15 @@ defmodule FragileWater.Game do
             <<realm_split_state::little-unsigned-integer-size(32)>> <>
             split_date
 
-        {packet, crypt} = Encryption.build_packet(@smsg_realm_split, payload, crypt)
-        CryptoSession.update(state.crypto_pid, crypt)
+        packet =
+          CryptoSession.send_packet_and_update_state(
+            state.crypto_pid,
+            socket,
+            @smsg_realm_split,
+            payload
+          )
 
         Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
-
-        ThousandIsland.Socket.send(socket, packet)
         {:continue, state}
 
       _ ->

@@ -19,6 +19,14 @@ defmodule FragileWater.Encryption do
     {encrypted_header <> payload, new_crypt}
   end
 
+  def create_tbc_key(session) do
+    s_key =
+      <<0x38, 0xA7, 0x83, 0x15, 0xF8, 0x92, 0x25, 0x30, 0x71, 0x98, 0x67, 0xB1, 0x8C, 0x4, 0xE2,
+        0xAA>>
+
+    :crypto.mac(:hmac, :sha, s_key, session)
+  end
+
   def encrypt_header(header, state) do
     acc = {<<>>, %{send_i: state.send_i, send_j: state.send_j}}
 
@@ -49,13 +57,5 @@ defmodule FragileWater.Encryption do
       )
 
     {header, Map.merge(state, crypt_state)}
-  end
-
-  def create_tbc_key(session) do
-    s_key =
-      <<0x38, 0xA7, 0x83, 0x15, 0xF8, 0x92, 0x25, 0x30, 0x71, 0x98, 0x67, 0xB1, 0x8C, 0x4, 0xE2,
-        0xAA>>
-
-    :crypto.mac(:hmac, :sha, s_key, session)
   end
 end
