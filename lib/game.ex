@@ -91,12 +91,6 @@ defmodule FragileWater.Game do
           <<0>> <>
           <<1>>
 
-      # {packet, crypt} =
-      #   Encryption.build_packet(
-      #     @smsg_auth_response,
-      #     payload,
-      #     crypt
-      #   )
       WorldConnection.send_packet_and_update(crypto_pid, socket, @smsg_auth_response, payload)
 
       {:continue, Map.merge(state, %{username: username, crypto_pid: crypto_pid})}
