@@ -1,4 +1,5 @@
-defmodule FragileWater.CryptoSession do
+defmodule FragileWater.WorldConnection do
+  require Logger
   use Agent
 
   alias FragileWater.Encryption
@@ -15,12 +16,13 @@ defmodule FragileWater.CryptoSession do
     Agent.get(pid, fn current_crypto_state -> current_crypto_state end)
   end
 
-  def send_packet_and_update_state(pid, socket, opcode, payload) do
-    current_state = get(pid)
-    {packet, crypt} = Encryption.build_packet(opcode, payload, current_state)
-    update(pid, crypt)
-    ThousandIsland.Socket.send(socket, packet)
-    packet
+  def send_packet_and_update(pid, socket, opcode, payload) do
+    Agent.get_and_update(pid, fn state ->
+      {packet, new_state} = Encryption.build_packet(opcode, payload, state)
+      ThousandIsland.Socket.send(socket, packet)
+      Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+      {state, new_state}
+    end)
   end
 
   defp internal_update(new_crypto_state, current_crypto_state) do

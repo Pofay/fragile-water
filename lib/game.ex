@@ -2,7 +2,7 @@ defmodule FragileWater.Game do
   use ThousandIsland.Handler
   require Logger
 
-  alias FragileWater.CryptoSession
+  alias FragileWater.WorldConnection
   alias FragileWater.SessionStorage
   alias FragileWater.CharacterStorage
   alias FragileWater.Encryption
@@ -80,7 +80,7 @@ defmodule FragileWater.Game do
       Logger.info("[GameServer] Key size for TBC is: #{inspect(byte_size(world_key))}")
 
       crypt = %{key: world_key, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
-      {:ok, crypto_pid} = CryptoSession.start_link(crypt)
+      {:ok, crypto_pid} = WorldConnection.start_link(crypt)
       Logger.info("[GameServer] Crypto PID: #{inspect(crypto_pid)}")
 
       # From https://gtker.com/wow_messages/docs/smsg_auth_response.html#client-version-243
@@ -91,18 +91,14 @@ defmodule FragileWater.Game do
           <<0>> <>
           <<1>>
 
-      {packet, crypt} =
-        Encryption.build_packet(
-          @smsg_auth_response,
-          payload,
-          crypt
-        )
+      # {packet, crypt} =
+      #   Encryption.build_packet(
+      #     @smsg_auth_response,
+      #     payload,
+      #     crypt
+      #   )
+      WorldConnection.send_packet_and_update(crypto_pid, socket, @smsg_auth_response, payload)
 
-      CryptoSession.update(crypto_pid, crypt)
-
-      Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
-
-      ThousandIsland.Socket.send(socket, packet)
       {:continue, Map.merge(state, %{username: username, crypto_pid: crypto_pid})}
     else
       Logger.error("[GameServer] Authentication failed for #{username}")
@@ -116,9 +112,9 @@ defmodule FragileWater.Game do
         socket,
         state
       ) do
-    case Encryption.decrypt_header(header, CryptoSession.get(state.crypto_pid)) do
+    case Encryption.decrypt_header(header, WorldConnection.get(state.crypto_pid)) do
       {<<size::big-size(16), opcode::little-size(32)>>, crypt} ->
-        CryptoSession.update(state.crypto_pid, crypt)
+        WorldConnection.update(state.crypto_pid, crypt)
         handle_world_packet(opcode, size, body, state, socket)
 
       other ->
@@ -169,15 +165,12 @@ defmodule FragileWater.Game do
             _ -> <<length>> <> Enum.join(characters_payload)
           end
 
-        packet =
-          CryptoSession.send_packet_and_update_state(
-            state.crypto_pid,
-            socket,
-            @smsg_char_enum,
-            payload
-          )
-
-        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+        WorldConnection.send_packet_and_update(
+          state.crypto_pid,
+          socket,
+          @smsg_char_enum,
+          payload
+        )
 
         {:continue, state}
 
@@ -189,15 +182,12 @@ defmodule FragileWater.Game do
 
         payload = <<sequence_id::little-size(32)>>
 
-        packet =
-          CryptoSession.send_packet_and_update_state(
-            state.crypto_pid,
-            socket,
-            @smsg_pong,
-            payload
-          )
-
-        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+        WorldConnection.send_packet_and_update(
+          state.crypto_pid,
+          socket,
+          @smsg_pong,
+          payload
+        )
 
         {:continue, Map.merge(state, %{latency: latency})}
 
@@ -229,15 +219,12 @@ defmodule FragileWater.Game do
 
         {_status, payload} = CharacterStorage.add_character(state.username, character)
 
-        packet =
-          CryptoSession.send_packet_and_update_state(
-            state.crypto_pid,
-            socket,
-            @smsg_char_create,
-            <<payload>>
-          )
-
-        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
+        WorldConnection.send_packet_and_update(
+          state.crypto_pid,
+          socket,
+          @smsg_char_create,
+          <<payload>>
+        )
 
         {:continue, state}
 
@@ -253,15 +240,13 @@ defmodule FragileWater.Game do
             <<realm_split_state::little-unsigned-integer-size(32)>> <>
             split_date
 
-        packet =
-          CryptoSession.send_packet_and_update_state(
-            state.crypto_pid,
-            socket,
-            @smsg_realm_split,
-            payload
-          )
+        WorldConnection.send_packet_and_update(
+          state.crypto_pid,
+          socket,
+          @smsg_realm_split,
+          payload
+        )
 
-        Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
         {:continue, state}
 
       _ ->
