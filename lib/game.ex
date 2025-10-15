@@ -217,7 +217,7 @@ defmodule FragileWater.Game do
           orientation: 2.7056
         }
 
-        {_status, payload} = CharacterStorage.add_character(state.username, character)
+        payload = CharacterStorage.add_character(state.username, character)
 
         WorldConnection.send_packet_and_update(
           state.crypto_pid,

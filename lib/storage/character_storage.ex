@@ -12,14 +12,14 @@ defmodule FragileWater.CharacterStorage do
     case get_characters(username) do
       {_username, []} ->
         :ets.insert(@player_characters, {username, [character]})
-        {:ok, @char_create_success}
+        @char_create_success
 
       {_username, characters} when length(characters) >= 10 ->
-        {:error, @char_create_server_limit}
+        @char_create_server_limit
 
       {username, characters} ->
         :ets.insert(@player_characters, {username, characters ++ [character]})
-        {:ok, @char_create_success}
+        @char_create_success
     end
   end
 
