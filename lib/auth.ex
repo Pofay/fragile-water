@@ -33,7 +33,7 @@ defmodule FragileWater.Auth do
         socket,
         _state
       ) do
-    Logger.info("[AUTH LOGON CHALLENGE]: #{account_name}")
+    Logger.info("[AuthServer]: AUTH_LOGON_CHALLENGE for: #{account_name}")
 
     state = logon_challenge_state(account_name)
 
@@ -51,7 +51,7 @@ defmodule FragileWater.Auth do
         unk3 <>
         <<0>>
 
-    Logger.info("[AUTH LOGON CHALLENGE]: Server Proof Generated")
+    Logger.info("[AuthServer]: Server Proof Generated")
     Logger.info("#{inspect(packet)}")
 
     ThousandIsland.Socket.send(
@@ -71,7 +71,7 @@ defmodule FragileWater.Auth do
         socket,
         state
       ) do
-    Logger.info("[AUTH PROOF]: #{state.account_name}")
+    Logger.info("[AuthServer]: AUTH_LOGIN_PROOF for: #{state.account_name}")
 
     public_a = reverse(client_public_key)
     scrambler = :crypto.hash(:sha, reverse(public_a) <> reverse(state.public_b))
@@ -88,7 +88,7 @@ defmodule FragileWater.Auth do
 
     session = interleave(s)
 
-    Logger.info("Session key size generated: #{inspect(byte_size(session))}")
+    Logger.info("[AuthServer]: Session key size generated: #{inspect(byte_size(session))}")
 
     mod_hash = :crypto.hash(:sha, reverse(@n))
     generator_hash = :crypto.hash(:sha, @g)
@@ -102,10 +102,10 @@ defmodule FragileWater.Auth do
         t3 <> t4 <> state.salt <> reverse(public_a) <> reverse(state.public_b) <> session
       )
 
-    Logger.info("[AUTH PROOF]: Verifying client proof for #{state.account_name}")
+    Logger.info("[AuthServer]: Verifying client proof for #{state.account_name}")
 
     if m == client_proof do
-      Logger.info("[AUTH PROOF]: Client proof matched for #{state.account_name}")
+      Logger.info("[AuthServer]: Client proof matched for #{state.account_name}")
 
       server_proof = :crypto.hash(:sha, reverse(public_a) <> client_proof <> session)
 
@@ -138,7 +138,7 @@ defmodule FragileWater.Auth do
 
   @impl ThousandIsland.Handler
   def handle_data(<<@cmd_realm_list, _padding::binary>>, socket, state) do
-    Logger.info("[REALM LIST]: #{inspect(@cmd_realm_list)}")
+    Logger.info("[AuthServer]: REALM_LIST #{inspect(@cmd_realm_list)}")
 
     # From https://wowdev.wiki/CMD_REALM_LIST_Server#_(2.4.3.8606)
     realm =
