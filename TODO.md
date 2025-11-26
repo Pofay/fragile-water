@@ -29,3 +29,22 @@ For starters, to check what version of Elixir and Erlang I'm using to first diag
 Additionally:
 
 - Maybe setting up CMangos for the client fix this issue.
+
+
+Found out that in my laptop, I log-in twice as shown why I have two crypto running. 
+
+The first one shows a succesful login and then a follow up unimplemented opcode that doesn't map to the Opcodes documentation.
+
+
+```
+
+20:36:24.526 [info] [GameServer] Crypto PID: #PID<0.796.0>
+
+20:36:28.204 [error] [GameServer] Unimplemented opcode: 0xF232010
+
+20:36:28.241 [info] [GameServer] Crypto PID: #PID<0.798.0>
+```
+
+The first one shows a succesful login and then a follow up unimplemented opcode that doesn't map to the Opcodes documentation.
+
+After showing the opcode it tries to login again hence why there's two processes running.
