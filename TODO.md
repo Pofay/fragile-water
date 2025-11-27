@@ -24,6 +24,7 @@ For starters, to check what version of Elixir and Erlang I'm using to first diag
 - Lock the version of Elixir in `mix.exs` from `1.18` -> `1.18.<PC_VERSION>`
 - Check if installation of Jason, Credo and bunt caused this.
 - Check if WoW Client used is downloaded from the same source.
+- There is some preliminary work with the client when installing `CMangos`. See if the files generated actually fixes the issue of not being able to create a character (multi process after login will still persist with this.)
 
 
 Additionally:
