@@ -48,3 +48,33 @@ The first one shows a succesful login and then a follow up unimplemented opcode 
 The first one shows a succesful login and then a follow up unimplemented opcode that doesn't map to the Opcodes documentation.
 
 After showing the opcode it tries to login again hence why there's two processes running.
+
+# Update
+
+This also happens when using the `thistle_tea` server implementation (with some updates to handle tbc specific server proof generation, realm list and character creation data)
+
+```
+11:03:33.804 [info] [GameServer] CMSG_AUTH_SESSION: username: PIKDUM, build: 8606, server_id: 0
+
+11:03:33.804 [info] [GameServer] Authentication successful: PIKDUM
+
+11:03:33.807 [info] [GameServer] Created new session with crypto PID: #PID<0.859.0>
+
+11:03:34.319 [info] [GameServer] CMSG_CHAR_ENUM
+
+11:03:34.339 [info] [AuthServer] CMD_REALM_LIST
+
+11:03:38.168 [error] [GameServer] Unimplemented opcode: 0xDBCE7CAC
+
+11:03:38.186 [info] [GameServer] SMSG_AUTH_CHALLENGE
+
+11:03:38.204 [info] [GameServer] CMSG_AUTH_SESSION: username: PIKDUM, build: 8606, server_id: 0 
+
+11:03:38.204 [info] [GameServer] Authentication successful: PIKDUM
+
+11:03:38.204 [info] [GameServer] Created new session with crypto PID: #PID<0.861.0>
+
+11:03:38.219 [info] [GameServer] CMSG_CHAR_ENUM
+
+11:04:08.269 [error] [GameServer] Unimplemented opcode: 0xDBCE7D47
+```
