@@ -26,6 +26,10 @@ For starters, to check what version of Elixir and Erlang I'm using to first diag
 - Check if WoW Client used is downloaded from the same source.
 - There is some preliminary work with the client when installing `CMangos`. See if the files generated actually fixes the issue of not being able to create a character (multi process after login will still persist with this.)
 
+- **Reference pikdum's fix during [June 20-21](https://pikdum.dev/posts/thistle-tea/) for Shadowburn's implementation on handling partial packet sends. I think this will resolve the issue**.
+
+- [Handling the accumulation of packets](https://github.com/pikdum/thistle_tea/commit/e53ec3663d4b933c6ca0331900b0083c79a9770e)
+- [Handling login race condition](https://github.com/pikdum/thistle_tea/commit/1e4182d03a85857156832aebe7e763554f25b0fa)
 
 Additionally:
 
