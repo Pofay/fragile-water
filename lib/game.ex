@@ -143,23 +143,38 @@ defmodule FragileWater.Game do
   end
 
   def handle_packet(socket, %{packet_stream: <<header::bytes-size(6), rest::binary>>} = state) do
-    with {:ok, decrypted_header} <-
-           WorldConnection.decrypt_header(state.crypto_pid, header, byte_size(rest)) do
-      <<size::big-size(16), opcode::little-size(32)>> = decrypted_header
-      <<payload::binary-size(size - 4), rest::binary>> = rest
-      state = Map.put(state, :packet_stream, rest)
+    # Peek at the header without committing crypto state
+    with {:ok, _decrypted_header, body_size, opcode} <-
+           WorldConnection.peek_header(state.crypto_pid, header),
+         # Check if we have enough data for the full packet body
+         true <- byte_size(rest) >= body_size do
+      # We have a complete packet - now commit the crypto state
+      :ok = WorldConnection.commit_header_crypto(state.crypto_pid)
 
-      if byte_size(rest) >= 6 do
-        handle_packet(socket, state)
-      else
-        handle_world_packet(opcode, size, payload, state, socket)
+      # Extract payload and update packet_stream
+      <<payload::binary-size(body_size), remaining::binary>> = rest
+      state = Map.put(state, :packet_stream, remaining)
+
+      # Process the current packet first, then check for more
+      case handle_world_packet(opcode, body_size + 4, payload, state, socket) do
+        {:continue, new_state} ->
+          # If there's more data, continue processing
+          if byte_size(remaining) >= 6 do
+            handle_packet(socket, new_state)
+          else
+            {:continue, new_state}
+          end
+
+        other ->
+          other
       end
     else
-      {:error, _} -> {:continue, state}
+      # Not enough data yet - wait for more without committing crypto state
+      _ -> {:continue, state}
     end
   end
 
-  def handle_packet(_socket, state), do: state
+  def handle_packet(_socket, state), do: {:continue, state}
 
   defp extract_name_with_rest(payload) do
     case :binary.match(payload, <<0>>) do

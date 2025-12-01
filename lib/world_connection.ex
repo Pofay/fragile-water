@@ -11,8 +11,21 @@ defmodule FragileWater.WorldConnection do
     GenServer.call(pid, {:encrypt_header, opcode, payload})
   end
 
-  def decrypt_header(pid, header, expected_size) do
-    GenServer.call(pid, {:decrypt_header, header, expected_size})
+  @doc """
+  Peek at a header without committing crypto state.
+  Returns {:ok, decrypted_header, body_size} or {:error, reason}.
+  Use this to check if we have enough data for a complete packet.
+  """
+  def peek_header(pid, header) do
+    GenServer.call(pid, {:peek_header, header})
+  end
+
+  @doc """
+  Commit the crypto state after successfully processing a complete packet.
+  This advances recv_i/recv_j by the header size (6 bytes).
+  """
+  def commit_header_crypto(pid) do
+    GenServer.call(pid, :commit_header_crypto)
   end
 
   @impl true
@@ -29,15 +42,28 @@ defmodule FragileWater.WorldConnection do
   end
 
   @impl true
-  def handle_call({:decrypt_header, header, expected_size}, _from, state) do
-    {decrypted_header, new_state} = internal_decrypt_header(header, state)
-    <<size::big-size(16), _opcode::little-size(32)>> = decrypted_header
+  def handle_call({:peek_header, header}, _from, state) do
+    {decrypted_header, crypt_state} = internal_decrypt_header_with_crypt(header, state)
+    <<size::big-size(16), opcode::little-size(32)>> = decrypted_header
+    body_size = size - 4
 
-    # wait until we have whole usable packet to decrypt header
-    if expected_size < size - 4 do
-      {:reply, {:error, :invalid_size}, state}
-    else
-      {:reply, {:ok, decrypted_header}, new_state}
+    # Store only the recv_i/recv_j changes to be committed later
+    state_with_pending = Map.put(state, :pending_recv_crypt, crypt_state)
+
+    {:reply, {:ok, decrypted_header, body_size, opcode}, state_with_pending}
+  end
+
+  @impl true
+  def handle_call(:commit_header_crypto, _from, state) do
+    case Map.pop(state, :pending_recv_crypt) do
+      {nil, state} ->
+        # No pending state, nothing to commit
+        {:reply, :ok, state}
+
+      {pending_crypt, state} ->
+        # Commit the pending recv_i/recv_j changes
+        new_state = Map.merge(state, pending_crypt)
+        {:reply, :ok, new_state}
     end
   end
 
@@ -59,21 +85,19 @@ defmodule FragileWater.WorldConnection do
     {header, Map.merge(state, crypt_state)}
   end
 
-  defp internal_decrypt_header(header, state) do
+  # Returns {decrypted_header, crypt_state} where crypt_state is just %{recv_i, recv_j}
+  defp internal_decrypt_header_with_crypt(header, state) do
     initial_acc = {<<>>, %{recv_i: state.recv_i, recv_j: state.recv_j}}
 
-    {header, crypt_state} =
-      Enum.reduce(
-        :binary.bin_to_list(header),
-        initial_acc,
-        fn byte, {header, crypt} ->
-          recv_i = rem(crypt.recv_i, byte_size(state.key))
-          x = bxor(byte - crypt.recv_j, :binary.at(state.key, recv_i))
-          <<truncated_x>> = <<x::little-size(8)>>
-          {header <> <<truncated_x>>, %{recv_i: recv_i + 1, recv_j: byte}}
-        end
-      )
-
-    {header, Map.merge(state, crypt_state)}
+    Enum.reduce(
+      :binary.bin_to_list(header),
+      initial_acc,
+      fn byte, {header, crypt} ->
+        recv_i = rem(crypt.recv_i, byte_size(state.key))
+        x = bxor(byte - crypt.recv_j, :binary.at(state.key, recv_i))
+        <<truncated_x>> = <<x::little-size(8)>>
+        {header <> <<truncated_x>>, %{recv_i: recv_i + 1, recv_j: byte}}
+      end
+    )
   end
 end
