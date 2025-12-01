@@ -1,4 +1,6 @@
-defmodule FragileWater.SessionStorage do
+defmodule FragileWater.SessionKeyStorage do
+  require Logger
+
   @player_session_table :fragile_water_player_session_table
 
   def init do

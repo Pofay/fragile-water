@@ -2,8 +2,8 @@ defmodule FragileWater.Game do
   use ThousandIsland.Handler
   require Logger
 
-  alias FragileWater.WorldConnection
-  alias FragileWater.SessionStorage
+  alias FragileWater.Session
+  alias FragileWater.SessionKeyStorage
   alias FragileWater.CharacterStorage
   alias FragileWater.Encryption
 
@@ -62,7 +62,7 @@ defmodule FragileWater.Game do
 
     Logger.info("[GameServer] Username: #{username}")
 
-    {username, session} = hd(SessionStorage.get(username))
+    {username, session} = hd(SessionKeyStorage.get(username))
 
     data =
       username <>
@@ -80,7 +80,7 @@ defmodule FragileWater.Game do
       Logger.info("[GameServer] Key size for TBC is: #{inspect(byte_size(world_key))}")
 
       crypt = %{key: world_key, send_i: 0, send_j: 0, recv_i: 0, recv_j: 0}
-      {:ok, crypto_pid} = WorldConnection.start_link(crypt)
+      {:ok, crypto_pid} = Session.start_link(crypt)
       Logger.info("[GameServer] Crypto PID: #{inspect(crypto_pid)}")
 
       # From https://gtker.com/wow_messages/docs/smsg_auth_response.html#client-version-243
@@ -91,7 +91,7 @@ defmodule FragileWater.Game do
           <<0>> <>
           <<1>>
 
-      WorldConnection.send_packet_and_update(crypto_pid, socket, @smsg_auth_response, payload)
+      send_packet(crypto_pid, @smsg_auth_response, socket, payload)
 
       {:continue, Map.merge(state, %{username: username, crypto_pid: crypto_pid})}
     else
@@ -102,31 +102,48 @@ defmodule FragileWater.Game do
 
   @impl ThousandIsland.Handler
   def handle_data(
-        <<header::bytes-size(6), body::binary>>,
+        data,
         socket,
         state
       ) do
-    case Encryption.decrypt_header(header, WorldConnection.get(state.crypto_pid)) do
-      {<<size::big-size(16), opcode::little-size(32)>>, crypt} ->
-        WorldConnection.update(state.crypto_pid, crypt)
-        handle_world_packet(opcode, size, body, state, socket)
+    state = Map.put(state, :packet_stream, Map.get(state, :packet_stream, <<>>) <> data)
+    handle_packet(socket, state)
+  end
 
-      other ->
-        Logger.error("[GameServer] Unknown decrypted header: #{inspect(other)}")
+  def handle_packet(socket, %{packet_stream: <<header::bytes-size(6), body::binary>>} = state) do
+    with {:ok, _decrypted_header, body_size, opcode} <-
+           Session.soft_decrypt_header(state.crypto_pid, header),
+         {:ok, payload, remaining} <- extract_payload(body, body_size) do
+      Session.commit_pending_crypto_state(state.crypto_pid)
+      state = Map.put(state, :packet_stream, remaining)
+
+      {:continue, new_state} = handle_world_packet(opcode, body_size + 4, payload, state, socket)
+
+      if byte_size(remaining) >= 6 do
+        handle_packet(socket, new_state)
+      else
+        {:continue, new_state}
+      end
+    else
+      # Invalid header (size < 4) - log error and close connection
+      {:error, :invalid_header} ->
+        Logger.error("[GameServer] Invalid packet header received")
+        {:close, state}
+
+      :incomplete_payload ->
+        Logger.info("[GameServer] Received incomplete payload. Buffering...")
+        {:continue, state}
     end
-
-    {:continue, state}
   end
 
-  @impl ThousandIsland.Handler
-  def handle_data(
-        packet,
-        _socket,
-        state
-      ) do
-    Logger.error("[GameServer] Unhandled packet: #{inspect(packet, limit: :infinity)})}")
-    {:continue, state}
+  def handle_packet(_socket, state), do: {:continue, state}
+
+  defp extract_payload(body, body_size) when byte_size(body) >= body_size do
+    <<payload::binary-size(body_size), remaining::binary>> = body
+    {:ok, payload, remaining}
   end
+
+  defp extract_payload(_body, _body_size), do: :incomplete_payload
 
   defp extract_name_with_rest(payload) do
     case :binary.match(payload, <<0>>) do
@@ -159,10 +176,10 @@ defmodule FragileWater.Game do
             _ -> <<length>> <> Enum.join(characters_payload)
           end
 
-        WorldConnection.send_packet_and_update(
+        send_packet(
           state.crypto_pid,
-          socket,
           @smsg_char_enum,
+          socket,
           payload
         )
 
@@ -176,10 +193,10 @@ defmodule FragileWater.Game do
 
         payload = <<sequence_id::little-size(32)>>
 
-        WorldConnection.send_packet_and_update(
+        send_packet(
           state.crypto_pid,
-          socket,
           @smsg_pong,
+          socket,
           payload
         )
 
@@ -213,10 +230,10 @@ defmodule FragileWater.Game do
 
         payload = CharacterStorage.add_character(state.username, character)
 
-        WorldConnection.send_packet_and_update(
+        send_packet(
           state.crypto_pid,
-          socket,
           @smsg_char_create,
+          socket,
           <<payload>>
         )
 
@@ -234,10 +251,10 @@ defmodule FragileWater.Game do
             <<realm_split_state::little-unsigned-integer-size(32)>> <>
             split_date
 
-        WorldConnection.send_packet_and_update(
+        send_packet(
           state.crypto_pid,
-          socket,
           @smsg_realm_split,
+          socket,
           payload
         )
 
@@ -315,5 +332,10 @@ defmodule FragileWater.Game do
     equipment_data = Enum.join(equipment_slots)
 
     equipment_data
+  end
+
+  defp send_packet(crypto_pid, opcode, socket, payload) do
+    {:ok, header} = Session.encrypt_header(crypto_pid, opcode, payload)
+    ThousandIsland.Socket.send(socket, header <> payload)
   end
 end

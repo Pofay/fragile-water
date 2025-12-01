@@ -2,23 +2,6 @@ defmodule FragileWater.Encryption do
   import Bitwise, only: [bxor: 2]
   require Logger
 
-  def build_packet(opcode, payload, crypt) do
-    size = byte_size(payload) + 2
-    header = <<size::big-size(16), opcode::little-size(16)>>
-
-    Logger.info(
-      "[GameServer] Encrypting header: #{inspect(header)} with crypt: #{inspect(crypt)}"
-    )
-
-    {encrypted_header, new_crypt} = encrypt_header(header, crypt)
-
-    Logger.info(
-      "[GameServer] Encrypted header: #{inspect(encrypted_header)} with new crypt: #{inspect(new_crypt)}"
-    )
-
-    {encrypted_header <> payload, new_crypt}
-  end
-
   def create_tbc_key(session) do
     s_key =
       <<0x38, 0xA7, 0x83, 0x15, 0xF8, 0x92, 0x25, 0x30, 0x71, 0x98, 0x67, 0xB1, 0x8C, 0x4, 0xE2,

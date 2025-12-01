@@ -8,7 +8,7 @@ defmodule FragileWater.Auth do
 
   import Binary, only: [reverse: 1]
 
-  alias FragileWater.SessionStorage
+  alias FragileWater.SessionKeyStorage
 
   @cmd_auth_logon_challenge 0
   @cmd_auth_logon_proof 1
@@ -120,7 +120,7 @@ defmodule FragileWater.Auth do
           <<0, 0, 0, 0>> <>
           <<0, 0>>
 
-      SessionStorage.put(state.account_name, state.session)
+      SessionKeyStorage.put(state.account_name, state.session)
 
       ThousandIsland.Socket.send(socket, packet)
       Logger.info("#{inspect(packet)}")

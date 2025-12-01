@@ -3,7 +3,7 @@ defmodule FragileWater.Application do
 
   @impl true
   def start(_type, _args) do
-    FragileWater.SessionStorage.init()
+    FragileWater.SessionKeyStorage.init()
     FragileWater.CharacterStorage.init()
 
     children = [
