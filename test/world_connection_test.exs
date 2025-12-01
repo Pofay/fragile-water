@@ -5,6 +5,11 @@ defmodule FragileWater.WorldConnectionTest do
 
   alias FragileWater.WorldConnection
 
+  # Test opcodes
+  @test_opcode_char_enum 0x037
+  @test_opcode_char_create 0x038
+  @test_opcode_auth_response 0x1EE
+
   # Create a test encryption key (same algorithm as Encryption.create_tbc_key)
   defp create_test_key do
     session = :crypto.strong_rand_bytes(40)
@@ -53,16 +58,15 @@ defmodule FragileWater.WorldConnectionTest do
       {:ok, receiver} = WorldConnection.start_link(state)
 
       # Create an encrypted client header
-      opcode = 0x037
       body_size = 10
-      {encrypted_header, _} = encrypt_client_header(opcode, body_size, state)
+      {encrypted_header, _} = encrypt_client_header(@test_opcode_char_enum, body_size, state)
 
       # Peek at the header
       {:ok, decrypted, decoded_body_size, decoded_opcode} = WorldConnection.peek_header(receiver, encrypted_header)
 
       # Verify the decoded values
       assert decoded_body_size == body_size
-      assert decoded_opcode == opcode
+      assert decoded_opcode == @test_opcode_char_enum
       assert byte_size(decrypted) == 6
     end
 
@@ -70,9 +74,8 @@ defmodule FragileWater.WorldConnectionTest do
       state = create_crypto_state()
       {:ok, receiver} = WorldConnection.start_link(state)
 
-      opcode = 0x037
       body_size = 10
-      {encrypted_header, _} = encrypt_client_header(opcode, body_size, state)
+      {encrypted_header, _} = encrypt_client_header(@test_opcode_char_enum, body_size, state)
 
       # Peek twice
       {:ok, d1, s1, o1} = WorldConnection.peek_header(receiver, encrypted_header)
@@ -89,23 +92,21 @@ defmodule FragileWater.WorldConnectionTest do
       {:ok, receiver} = WorldConnection.start_link(state)
 
       # Create two encrypted client headers in sequence
-      opcode1 = 0x037
       body_size1 = 10
-      {encrypted1, state_after_first} = encrypt_client_header(opcode1, body_size1, state)
+      {encrypted1, state_after_first} = encrypt_client_header(@test_opcode_char_enum, body_size1, state)
 
-      opcode2 = 0x038
       body_size2 = 20
-      {encrypted2, _} = encrypt_client_header(opcode2, body_size2, state_after_first)
+      {encrypted2, _} = encrypt_client_header(@test_opcode_char_create, body_size2, state_after_first)
 
       # Peek and commit first header
       {:ok, _d1, s1, o1} = WorldConnection.peek_header(receiver, encrypted1)
-      assert o1 == opcode1
+      assert o1 == @test_opcode_char_enum
       assert s1 == body_size1
       :ok = WorldConnection.commit_header_crypto(receiver)
 
       # Now peek second header - should decode correctly because state was committed
       {:ok, _d2, s2, o2} = WorldConnection.peek_header(receiver, encrypted2)
-      assert o2 == opcode2
+      assert o2 == @test_opcode_char_create
       assert s2 == body_size2
     end
 
@@ -114,24 +115,22 @@ defmodule FragileWater.WorldConnectionTest do
       {:ok, receiver} = WorldConnection.start_link(state)
 
       # Create two encrypted client headers in sequence
-      opcode1 = 0x037
       body_size1 = 10
-      {encrypted1, state_after_first} = encrypt_client_header(opcode1, body_size1, state)
+      {encrypted1, state_after_first} = encrypt_client_header(@test_opcode_char_enum, body_size1, state)
 
-      opcode2 = 0x038
       body_size2 = 20
-      {encrypted2, _} = encrypt_client_header(opcode2, body_size2, state_after_first)
+      {encrypted2, _} = encrypt_client_header(@test_opcode_char_create, body_size2, state_after_first)
 
       # Peek first header but DON'T commit
       {:ok, _d1, s1, o1} = WorldConnection.peek_header(receiver, encrypted1)
-      assert o1 == opcode1
+      assert o1 == @test_opcode_char_enum
       assert s1 == body_size1
       # No commit here!
 
       # Try to peek second header - will fail because recv state wasn't advanced
       {:ok, _d2, s2, o2} = WorldConnection.peek_header(receiver, encrypted2)
       # The opcode and size will be garbage because we decrypted with wrong state
-      assert o2 != opcode2 or s2 != body_size2
+      assert o2 != @test_opcode_char_create or s2 != body_size2
     end
   end
 
@@ -147,9 +146,8 @@ defmodule FragileWater.WorldConnectionTest do
       state = create_crypto_state()
       {:ok, receiver} = WorldConnection.start_link(state)
 
-      opcode = 0x037
       body_size = 10
-      {encrypted_header, _} = encrypt_client_header(opcode, body_size, state)
+      {encrypted_header, _} = encrypt_client_header(@test_opcode_char_enum, body_size, state)
 
       # Peek and commit
       {:ok, _, _, _} = WorldConnection.peek_header(receiver, encrypted_header)
@@ -164,10 +162,9 @@ defmodule FragileWater.WorldConnectionTest do
     test "encrypts server header correctly (4 bytes)" do
       {:ok, pid} = WorldConnection.start_link(create_crypto_state())
 
-      opcode = 0x1EE
       payload = <<0x0C, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1>>
 
-      {:ok, encrypted} = WorldConnection.encrypt_header(pid, opcode, payload)
+      {:ok, encrypted} = WorldConnection.encrypt_header(pid, @test_opcode_auth_response, payload)
 
       # Server header should be 4 bytes (2 size + 2 opcode for TBC)
       assert byte_size(encrypted) == 4

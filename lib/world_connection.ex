@@ -105,7 +105,7 @@ defmodule FragileWater.WorldConnection do
     {header, Map.merge(state, crypt_state)}
   end
 
-  # Returns {decrypted_header, crypt_state} where crypt_state is just %{recv_i, recv_j}
+  # Returns {decrypted_header, crypt_state} where crypt_state contains only %{recv_i: integer, recv_j: integer}
   defp internal_decrypt_header_with_crypt(header, state) do
     initial_acc = {<<>>, %{recv_i: state.recv_i, recv_j: state.recv_j}}
 
