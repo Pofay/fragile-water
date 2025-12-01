@@ -41,7 +41,19 @@ defmodule FragileWater.Encryption do
     {header, Map.merge(state, crypt_state)}
   end
 
-  def decrypt_header(header, state) do
+  def decrypt_header(header, expected_size, state) do
+    {decrypted_header, new_state} = internal_decrypt_header(header, state)
+    <<size::big-size(16), _opcode::little-size(32)>> = decrypted_header
+
+    # wait until we have whole usable packet to decrypt header
+    if expected_size < size - 4 do
+      {:error, :invalid_size, new_state}
+    else
+      {:ok, decrypted_header, new_state}
+    end
+  end
+
+  defp internal_decrypt_header(header, state) do
     acc = {<<>>, %{recv_i: state.recv_i, recv_j: state.recv_j}}
 
     {header, crypt_state} =

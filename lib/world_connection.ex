@@ -1,37 +1,79 @@
 defmodule FragileWater.WorldConnection do
-  require Logger
-  use Agent
+  use GenServer
 
-  alias FragileWater.Encryption
+  import Bitwise, only: [bxor: 2]
 
-  def start_link(initial_crypto_state) do
-    Agent.start_link(fn -> initial_crypto_state end, name: __MODULE__)
+  def start_link(initial) do
+    GenServer.start_link(__MODULE__, initial)
   end
 
-  def update(pid, new_crypto_state) do
-    Agent.update(pid, &internal_update(new_crypto_state, &1))
+  def encrypt_header(pid, opcode, payload) do
+    GenServer.call(pid, {:encrypt_header, opcode, payload})
   end
 
-  def get(pid) do
-    Agent.get(pid, fn current_crypto_state -> current_crypto_state end)
+  def decrypt_header(pid, header, expected_size) do
+    GenServer.call(pid, {:decrypt_header, header, expected_size})
   end
 
-  def send_packet_and_update(pid, socket, opcode, payload) do
-    Agent.get_and_update(pid, fn state ->
-      {packet, new_state} = Encryption.build_packet(opcode, payload, state)
-      ThousandIsland.Socket.send(socket, packet)
-      Logger.info("[GameServer] Packet: #{inspect(packet, limit: :infinity)}")
-      {state, new_state}
-    end)
+  @impl true
+  def init(initial) do
+    {:ok, initial}
   end
 
-  defp internal_update(new_crypto_state, current_crypto_state) do
-    %{
-      current_crypto_state
-      | send_i: new_crypto_state.send_i,
-        send_j: new_crypto_state.send_j,
-        recv_i: new_crypto_state.recv_i,
-        recv_j: new_crypto_state.recv_j
-    }
+  @impl true
+  def handle_call({:encrypt_header, opcode, payload}, _from, state) do
+    size = byte_size(payload) + 2
+    header = <<size::big-size(16), opcode::little-size(16)>>
+    {encrypted_header, new_state} = internal_encrypt_header(header, state)
+    {:reply, {:ok, encrypted_header}, new_state}
+  end
+
+  @impl true
+  def handle_call({:decrypt_header, header, expected_size}, _from, state) do
+    {decrypted_header, new_state} = internal_decrypt_header(header, state)
+    <<size::big-size(16), _opcode::little-size(32)>> = decrypted_header
+
+    # wait until we have whole usable packet to decrypt header
+    if expected_size < size - 4 do
+      {:reply, {:error, :invalid_size}, state}
+    else
+      {:reply, {:ok, decrypted_header}, new_state}
+    end
+  end
+
+  defp internal_encrypt_header(header, state) do
+    initial_acc = {<<>>, %{send_i: state.send_i, send_j: state.send_j}}
+
+    {header, crypt_state} =
+      Enum.reduce(
+        :binary.bin_to_list(header),
+        initial_acc,
+        fn byte, {header, crypt} ->
+          send_i = rem(crypt.send_i, byte_size(state.key))
+          x = bxor(byte, :binary.at(state.key, send_i)) + crypt.send_j
+          <<truncated_x>> = <<x::little-size(8)>>
+          {header <> <<truncated_x>>, %{send_i: send_i + 1, send_j: truncated_x}}
+        end
+      )
+
+    {header, Map.merge(state, crypt_state)}
+  end
+
+  defp internal_decrypt_header(header, state) do
+    initial_acc = {<<>>, %{recv_i: state.recv_i, recv_j: state.recv_j}}
+
+    {header, crypt_state} =
+      Enum.reduce(
+        :binary.bin_to_list(header),
+        initial_acc,
+        fn byte, {header, crypt} ->
+          recv_i = rem(crypt.recv_i, byte_size(state.key))
+          x = bxor(byte - crypt.recv_j, :binary.at(state.key, recv_i))
+          <<truncated_x>> = <<x::little-size(8)>>
+          {header <> <<truncated_x>>, %{recv_i: recv_i + 1, recv_j: byte}}
+        end
+      )
+
+    {header, Map.merge(state, crypt_state)}
   end
 end
