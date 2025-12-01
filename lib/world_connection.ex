@@ -7,13 +7,28 @@ defmodule FragileWater.WorldConnection do
     GenServer.start_link(__MODULE__, initial)
   end
 
+  @doc """
+  Encrypt a 4-byte server header.
+  
+  The server header format is:
+  - 2 bytes: size (big-endian), includes opcode (payload size + 2)
+  - 2 bytes: opcode (little-endian)
+  
+  Returns {:ok, encrypted_header}.
+  """
   def encrypt_header(pid, opcode, payload) do
     GenServer.call(pid, {:encrypt_header, opcode, payload})
   end
 
   @doc """
-  Peek at a header without committing crypto state.
-  Returns {:ok, decrypted_header, body_size} or {:error, reason}.
+  Peek at a 6-byte client header without committing crypto state.
+  Returns {:ok, decrypted_header, body_size, opcode}.
+  
+  The client header format is:
+  - 2 bytes: size (big-endian)
+  - 4 bytes: opcode (little-endian)
+  
+  body_size is calculated as size - 4 (excludes opcode bytes).
   Use this to check if we have enough data for a complete packet.
   """
   def peek_header(pid, header) do
@@ -47,10 +62,15 @@ defmodule FragileWater.WorldConnection do
     <<size::big-size(16), opcode::little-size(32)>> = decrypted_header
     body_size = size - 4
 
-    # Store only the recv_i/recv_j changes to be committed later
-    state_with_pending = Map.put(state, :pending_recv_crypt, crypt_state)
+    # Validate that body_size is non-negative (size must be at least 4 for valid packet)
+    if body_size < 0 do
+      {:reply, {:error, :invalid_header}, state}
+    else
+      # Store only the recv_i/recv_j changes to be committed later
+      state_with_pending = Map.put(state, :pending_recv_crypt, crypt_state)
 
-    {:reply, {:ok, decrypted_header, body_size, opcode}, state_with_pending}
+      {:reply, {:ok, decrypted_header, body_size, opcode}, state_with_pending}
+    end
   end
 
   @impl true

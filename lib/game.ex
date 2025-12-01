@@ -169,8 +169,14 @@ defmodule FragileWater.Game do
           other
       end
     else
+      # Invalid header (size < 4) - log error and close connection
+      {:error, :invalid_header} ->
+        Logger.error("[GameServer] Invalid packet header received")
+        {:close, state}
+
       # Not enough data yet - wait for more without committing crypto state
-      _ -> {:continue, state}
+      _ ->
+        {:continue, state}
     end
   end
 
