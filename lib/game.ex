@@ -114,6 +114,26 @@ defmodule FragileWater.Game do
 
   @impl ThousandIsland.Handler
   def handle_data(
+        <<size::big-size(16), @cmsg_ping::little-size(32), body::binary-size(size - 4),
+          additional_data::binary>>,
+        socket,
+        state
+      ) do
+    if byte_size(additional_data) > 0, do: handle_data(additional_data, socket, state)
+    <<sequence_id::little-size(32), latency::little-size(32)>> = body
+
+    Logger.info("CMSG_PING latency=#{latency}")
+
+    ThousandIsland.Socket.send(
+      socket,
+      <<6::big-size(16), @smsg_pong::little-size(16), sequence_id::little-size(32)>>
+    )
+
+    {:continue, Map.put(state, :latency, latency)}
+  end
+
+  @impl ThousandIsland.Handler
+  def handle_data(
         data,
         socket,
         state
@@ -176,17 +196,17 @@ defmodule FragileWater.Game do
 
         {:continue, state}
 
-      @cmsg_ping ->
-        Logger.info("[GameServer] CMSG_PING")
+      # @cmsg_ping ->
+      #   Logger.info("[GameServer] CMSG_PING")
 
-        <<sequence_id::little-size(32), latency::little-size(32)>> = body
-        Logger.info("[GameServer] CMSG_PING: sequence_id: #{sequence_id}, latency: #{latency}")
+      #   <<sequence_id::little-size(32), latency::little-size(32)>> = body
+      #   Logger.info("[GameServer] CMSG_PING: sequence_id: #{sequence_id}, latency: #{latency}")
 
-        payload = <<sequence_id::little-size(32)>>
+      #   payload = <<sequence_id::little-size(32)>>
 
-        send_packet(state.crypto_pid, @smsg_pong, socket, payload)
+      #   send_packet(state.crypto_pid, @smsg_pong, socket, payload)
 
-        {:continue, Map.merge(state, %{latency: latency})}
+      #   {:continue, Map.merge(state, %{latency: latency})}
 
       @cmsg_char_create ->
         Logger.info("[GameServer] CMSG_CHAR_CREATE")
