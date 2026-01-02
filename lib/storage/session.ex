@@ -10,12 +10,12 @@ defmodule FragileWater.Session do
     GenServer.call(pid, {:encrypt_header, opcode, payload})
   end
 
-  def soft_decrypt_header(pid, header) do
-    GenServer.call(pid, {:soft_decrypt_header, header})
+  def enqueue_packets(pid, header) do
+    GenServer.call(pid, {:enqueue_packets, header})
   end
 
-  def commit_pending_crypto_state(pid) do
-    GenServer.call(pid, :commit_pending_crypto_state)
+  def commit_enqueued_packets(pid) do
+    GenServer.call(pid, :commit_enqueued_packets)
   end
 
   @impl true
@@ -32,7 +32,7 @@ defmodule FragileWater.Session do
   end
 
   @impl true
-  def handle_call({:soft_decrypt_header, header}, _from, state) do
+  def handle_call({:enqueue_packets, header}, _from, state) do
     {decrypted_header, crypt_state} = Encryption.decrypt_header(header, state)
     <<size::big-size(16), opcode::little-size(32)>> = decrypted_header
     body_size = size - 4
@@ -41,23 +41,23 @@ defmodule FragileWater.Session do
       {:reply, {:error, :invalid_header}, state}
     else
       state_with_pending =
-        Map.put(state, :pending_crypto_state, %{
+        Map.put(state, :enqueued_packets, %{
           recv_i: crypt_state.recv_i,
           recv_j: crypt_state.recv_j
         })
 
-      {:reply, {:ok, decrypted_header, body_size, opcode}, state_with_pending}
+      {:reply, {:ok, body_size, opcode}, state_with_pending}
     end
   end
 
   @impl true
-  def handle_call(:commit_pending_crypto_state, _from, state) do
-    case Map.pop(state, :pending_crypto_state) do
+  def handle_call(:commit_enqueued_packets, _from, state) do
+    case Map.pop(state, :enqueued_packets) do
       {nil, state} ->
         {:reply, :ok, state}
 
-      {pending_crypto_state, state} ->
-        new_state = Map.merge(state, pending_crypto_state)
+      {enqueued_packets, state} ->
+        new_state = Map.merge(state, enqueued_packets)
         {:reply, :ok, new_state}
     end
   end

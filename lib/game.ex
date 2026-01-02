@@ -111,10 +111,10 @@ defmodule FragileWater.Game do
   end
 
   def handle_packet(socket, %{packet_stream: <<header::bytes-size(6), body::binary>>} = state) do
-    with {:ok, _decrypted_header, body_size, opcode} <-
-           Session.soft_decrypt_header(state.crypto_pid, header),
+    with {:ok, body_size, opcode} <-
+           Session.enqueue_packets(state.crypto_pid, header),
          {:ok, payload, remaining} <- extract_payload(body, body_size) do
-      Session.commit_pending_crypto_state(state.crypto_pid)
+      Session.commit_enqueued_packets(state.crypto_pid)
       state = Map.put(state, :packet_stream, remaining)
 
       {:continue, new_state} = handle_world_packet(opcode, body_size + 4, payload, state, socket)
