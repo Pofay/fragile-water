@@ -7,7 +7,8 @@ defmodule FragileWater.Application do
     FragileWater.CharacterStorage.init()
 
     children = [
-      # {ThousandIsland, port: 3724, handler_module: FragileWater.AuthProxy}
+      FragileWater.DBC,
+      FragileWater.Mangos,
       {ThousandIsland, port: 3724, handler_module: FragileWater.Auth, handler_options: %{}},
       {ThousandIsland, port: 8085, handler_module: FragileWater.Game, handler_options: %{}}
     ]

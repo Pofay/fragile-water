@@ -53,5 +53,9 @@ rebar3.crashdump
 # Ignore all local history of files
 .history
 .ionide
+
+# Ignore Generated DBC Files converted to SQLite
 db/*.sqlite
+db/*.sqlite-shm
+db/*.sqlite-wal
 # End of https://www.toptal.com/developers/gitignore/api/elixir,erlang,visualstudiocode
