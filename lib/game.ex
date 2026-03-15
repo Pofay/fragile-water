@@ -8,6 +8,7 @@ defmodule FragileWater.Game do
   alias FragileWater.Encryption
   alias FragileWater.Mangos
   alias FragileWater.Mangos.ItemTemplate
+  alias FragileWater.Mangos.PlayerCreateInfo
 
   @smsg_auth_challenge 0x1EC
   @cmsg_auth_session 0x1ED
@@ -208,6 +209,7 @@ defmodule FragileWater.Game do
         Logger.info("[GameServer] CMSG_CHAR_CREATE")
 
         character_data = parse_char_create_body(body)
+        additional_info = Mangos.get_by(PlayerCreateInfo, race: character_data.race, class: character_data.char_class)
 
         character = %{
           guid: :binary.decode_unsigned(:crypto.strong_rand_bytes(64)),
@@ -222,12 +224,12 @@ defmodule FragileWater.Game do
           facial_hair: character_data.facial_hair,
           outfit_id: character_data.outfit_id,
           level: 1,
-          area: 85,
-          map: 0,
-          x: 1676.71,
-          y: 1678.31,
-          z: 121.67,
-          orientation: 2.7056
+          area: additional_info.zone,
+          map: additional_info.map,
+          x: additional_info.position_x,
+          y: additional_info.position_y,
+          z: additional_info.position_z,
+          orientation: additional_info.orientation
         }
 
         payload = CharacterStorage.add_character(state.username, character)
