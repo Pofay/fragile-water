@@ -6,6 +6,8 @@ defmodule FragileWater.Game do
   alias FragileWater.SessionKeyStorage
   alias FragileWater.CharacterStorage
   alias FragileWater.Encryption
+  alias FragileWater.Mangos
+  alias FragileWater.Mangos.ItemTemplate
 
   @smsg_auth_challenge 0x1EC
   @cmsg_auth_session 0x1ED
@@ -318,24 +320,63 @@ defmodule FragileWater.Game do
   end
 
   defp build_tbc_equipment() do
-    # TBC has enchantment value
-    # Vanilla includes Bag data
-    # At https://github.com/gtker/wow_messages/blob/main/wow_message_parser/wowm/world/character_screen/smsg_char_enum_2_4_3.wowm#L3
+    # Example for Dreadnaught battlegear:
+    chest = Mangos.get(ItemTemplate, 22416)
+    legs = Mangos.get(ItemTemplate, 22417)
+    head = Mangos.get(ItemTemplate, 22418)
+    shoulders = Mangos.get(ItemTemplate, 22419)
+    feet = Mangos.get(ItemTemplate, 22420)
+    hands = Mangos.get(ItemTemplate, 22421)
+    waist = Mangos.get(ItemTemplate, 22422)
+    wrist = Mangos.get(ItemTemplate, 22423)
+
+    # Dory's Embrace, Corrupted Ashbringer, Thoridal and Alliance Tabard
+    back = Mangos.get(ItemTemplate, 33484)
+    main_hand = Mangos.get(ItemTemplate, 22691)
+    ranged = Mangos.get(ItemTemplate, 34334)
+    tabard = Mangos.get(ItemTemplate, 15196)
 
     equipment_slots =
-      Enum.map(0..19, fn _slot ->
-        <<0::little-size(32)>> <>
-          <<0>> <>
-          <<0::little-size(32)>>
-      end)
+      display_character_gear(head.display_id, 0, 0) <>
+        display_character_gear(0, 0, 0) <>
+        display_character_gear(shoulders.display_id, 0, 0) <>
+        display_character_gear(0, 0, 0) <>
+        display_character_gear(chest.display_id, 0, 0) <>
+        display_character_gear(waist.display_id, 0, 0) <>
+        display_character_gear(legs.display_id, 0, 0) <>
+        display_character_gear(feet.display_id, 0, 0) <>
+        display_character_gear(wrist.display_id, 0, 0) <>
+        display_character_gear(hands.display_id, 0, 0) <>
+        display_character_gear(0, 0, 0) <>
+        display_character_gear(0, 0, 0) <>
+        display_character_gear(0, 0, 0) <>
+        display_character_gear(0, 0, 0) <>
+        display_character_gear(back.display_id, 0, 0) <>
+        display_character_gear(main_hand.display_id, 0, 0) <>
+        display_character_gear(0, 0, 0) <>
+        display_character_gear(ranged.display_id, 0, 0) <>
+        display_character_gear(tabard.display_id, 0, 0) <>
+        display_character_gear(0, 0, 0)
 
-    equipment_data = Enum.join(equipment_slots)
-
-    equipment_data
+    equipment_slots
   end
 
   defp send_packet(crypto_pid, opcode, socket, payload) do
     {:ok, header} = Session.encrypt_header(crypto_pid, opcode, payload)
     ThousandIsland.Socket.send(socket, header <> payload)
+  end
+
+  defp display_character_gear(display_id, inventory_type, enchantment) do
+    # TBC has enchantment value while Vanilla doesn't have it.
+    # At https://github.com/gtker/wow_messages/blob/main/wow_message_parser/wowm/world/character_screen/smsg_char_enum_2_4_3.wowm#L3
+
+    # struct CharacterGear {
+    # u32 equipment_display_id;
+    # InventoryType inventory_type;
+    # u32 enchantment;
+    # }
+    <<display_id::little-size(32)>> <>
+      <<inventory_type>> <>
+      <<enchantment::little-size(32)>>
   end
 end
