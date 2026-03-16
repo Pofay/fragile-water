@@ -29,4 +29,14 @@ defmodule FragileWater.CharacterStorage do
       _ -> {username, []}
     end
   end
+
+  def get_by_guid(username, guid) do
+    case :ets.lookup(@player_characters, username) do
+      [{_, characters}] ->
+        Enum.find(characters, fn character -> character.guid == guid end)
+
+      _ ->
+        nil
+    end
+  end
 end

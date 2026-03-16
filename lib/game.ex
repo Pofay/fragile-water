@@ -27,6 +27,11 @@ defmodule FragileWater.Game do
   @cmsg_char_create 0x036
   @smsg_char_create 0x03A
 
+  @cmsg_player_login 0x03D
+  @smg_login_verify_world 0x236
+  @smg_tutorial_flags 0x0FD
+  @smg_update_object 0x0A9
+
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
     seed = :crypto.strong_rand_bytes(4)
@@ -209,10 +214,15 @@ defmodule FragileWater.Game do
         Logger.info("[GameServer] CMSG_CHAR_CREATE")
 
         character_data = parse_char_create_body(body)
-        additional_info = Mangos.get_by(PlayerCreateInfo, race: character_data.race, class: character_data.char_class)
+
+        additional_info =
+          Mangos.get_by(PlayerCreateInfo,
+            race: character_data.race,
+            class: character_data.char_class
+          )
 
         character = %{
-          guid: :binary.decode_unsigned(:crypto.strong_rand_bytes(64)),
+          guid: :binary.decode_unsigned(:crypto.strong_rand_bytes(8)),
           name: character_data.name,
           race: character_data.race,
           class: character_data.char_class,
@@ -240,6 +250,305 @@ defmodule FragileWater.Game do
           socket,
           <<payload>>
         )
+
+        {:continue, state}
+
+      @cmsg_player_login ->
+        <<character_guid::little-size(64)>> = body
+        Logger.info("[GameServer] CMSG_PLAYER_LOGIN: character_guid: #{character_guid}")
+
+        character = CharacterStorage.get_by_guid(state.username, character_guid)
+
+        IO.inspect(character)
+
+        payload =
+          <<character.map::little-size(32)>> <>
+            <<character.x::little-float-size(32)>> <>
+            <<character.y::little-float-size(32)>> <>
+            <<character.z::little-float-size(32)>> <>
+            <<character.orientation::little-float-size(32)>>
+
+        send_packet(
+          state.crypto_pid,
+          @smg_login_verify_world,
+          socket,
+          payload
+        )
+
+        send_packet(
+          state.crypto_pid,
+          @smg_tutorial_flags,
+          socket,
+          <<0::little-size(256)>>
+        )
+
+        packet =
+          <<
+            # amount_of_objects: u32
+            1,
+            0,
+            0,
+            0
+          >> <>
+            <<
+              # has_transport: u8
+              0
+            >> <>
+            <<
+              # update type = CREATE_OBJECT2
+              3
+            >> <>
+            <<
+              # packed guid, guid = 4
+              1,
+              4
+            >> <>
+            <<
+              # object type = PLAYER
+              4
+            >> <>
+            <<
+              # update flags: SELF | ALL | LIVING = 0x31 (49) - u8
+              49
+            >> <>
+            <<
+              # === LIVING MOVEMENT DATA ===
+              # MovementFlags: u32 = NONE
+              0,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # extra_flags: u8
+              0
+            >> <>
+            <<
+              # timestamp: u32
+              0,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # position x (-8949.95)
+              205,
+              215,
+              11,
+              198
+            >> <>
+            <<
+              # position y (-132.493)
+              53,
+              126,
+              4,
+              195
+            >> <>
+            <<
+              # position z (83.5312)
+              249,
+              15,
+              167,
+              66
+            >> <>
+            <<
+              # orientation (0.0)
+              0,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # fall time (0.0)
+              0,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # walk speed (1.0)
+              0,
+              0,
+              128,
+              63
+            >> <>
+            <<
+              # run speed (7.0)
+              0,
+              0,
+              224,
+              64
+            >> <>
+            <<
+              # run back speed (4.5)
+              0,
+              0,
+              144,
+              64
+            >> <>
+            <<
+              # swim speed (0.0)
+              0,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # flying speed (0.0)
+              0,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # backwards flying speed (0.0)
+              0,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # backwards swim speed (0.0)
+              0,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # turn rate (pi ≈ 3.14159)
+              219,
+              15,
+              73,
+              64
+            >> <>
+            <<
+              # === ALL flag payload: unknown2 u32 ===
+              0,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # === UPDATE FIELDS ===
+              # number of mask blocks: u8 = 5
+              5
+            >> <>
+            <<
+              # mask block 0: offsets 0,1,2,4,22,28 = 0x10400017
+              0x17,
+              0x00,
+              0x40,
+              0x10
+            >> <>
+            <<
+              # mask block 1: offsets 34(bit2),35(bit3),36(bit4) = 0x0000001C
+              0x1C,
+              0x00,
+              0x00,
+              0x00
+            >> <>
+            <<
+              # mask block 2: empty
+              0x00,
+              0x00,
+              0x00,
+              0x00
+            >> <>
+            <<
+              # mask block 3: empty
+              0x00,
+              0x00,
+              0x00,
+              0x00
+            >> <>
+            <<
+              # mask block 4: offsets 152(bit24),153(bit25) = 0x03000000
+              0x00,
+              0x00,
+              0x00,
+              0x03
+            >> <>
+            <<
+              # --- VALUES in offset order ---
+
+              # offset 0: OBJECT_GUID low = 4
+              4,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # offset 1: OBJECT_GUID high = 0
+              0,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # offset 2: OBJECT_TYPE = 0x19 (OBJECT|UNIT|PLAYER = 1|8|16)
+              25,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # offset 4: OBJECT_SCALE_X = 1.0f
+              0,
+              0,
+              128,
+              63
+            >> <>
+            <<
+              # offset 22: UNIT_HEALTH = 100
+              100,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # offset 28: UNIT_MAXHEALTH = 100
+              100,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # offset 34: UNIT_LEVEL = 1
+              1,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # offset 35: UNIT_FACTIONTEMPLATE = 1
+              1,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # offset 36: UNIT_BYTES_0 (race, class, gender, power)
+              character.race,
+              character.class,
+              character.gender,
+              1
+            >> <>
+            <<
+              # offset 152: UNIT_DISPLAYID = 49 (male human)
+              49,
+              0,
+              0,
+              0
+            >> <>
+            <<
+              # offset 153: UNIT_NATIVEDISPLAYID = 50
+              50,
+              0,
+              0,
+              0
+            >>
+
+        send_packet(state.crypto_pid, @smg_update_object, socket, packet)
 
         {:continue, state}
 
