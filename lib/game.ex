@@ -39,9 +39,11 @@ defmodule FragileWater.Game do
     opcode = <<@smsg_auth_challenge::little-size(16)>>
 
     packet =
-      size <>
-        opcode <>
+      IO.iodata_to_binary([
+        size,
+        opcode,
         seed
+      ])
 
     Logger.info("[GameServer] SMSG_AUTH_CHALLENGE")
     Logger.info("[GameServer] Sending SMSG_AUTH_CHALLENGE with seed: #{inspect(seed)}")
@@ -73,11 +75,13 @@ defmodule FragileWater.Game do
     {username, session} = hd(SessionKeyStorage.get(username))
 
     data =
-      username <>
-        <<0::little-size(32)>> <>
-        client_seed <>
-        state.seed <>
+      IO.iodata_to_binary([
+        username,
+        <<0::little-size(32)>>,
+        client_seed,
+        state.seed,
         session
+      ])
 
     server_proof = :crypto.hash(:sha, data)
 
@@ -93,11 +97,13 @@ defmodule FragileWater.Game do
 
       # From https://gtker.com/wow_messages/docs/smsg_auth_response.html#client-version-243
       payload =
-        <<0x0C::little-size(32)>> <>
-          <<0>> <>
-          <<0::little-size(32)>> <>
-          <<0>> <>
+        IO.iodata_to_binary([
+          <<0x0C::little-size(32)>>,
+          <<0>>,
+          <<0::little-size(32)>>,
+          <<0>>,
           <<1>>
+        ])
 
       send_packet(crypto_pid, @smsg_auth_response, socket, payload)
 
@@ -181,7 +187,7 @@ defmodule FragileWater.Game do
         payload =
           case length do
             0 -> <<0>>
-            _ -> <<length>> <> Enum.join(characters_payload)
+            _ -> IO.iodata_to_binary([<<length>>, Enum.join(characters_payload)])
           end
 
         send_packet(
@@ -262,11 +268,13 @@ defmodule FragileWater.Game do
         IO.inspect(character)
 
         payload =
-          <<character.map::little-size(32)>> <>
-            <<character.x::little-float-size(32)>> <>
-            <<character.y::little-float-size(32)>> <>
-            <<character.z::little-float-size(32)>> <>
+          IO.iodata_to_binary([
+            <<character.map::little-size(32)>>,
+            <<character.x::little-float-size(32)>>,
+            <<character.y::little-float-size(32)>>,
+            <<character.z::little-float-size(32)>>,
             <<character.orientation::little-float-size(32)>>
+          ])
 
         send_packet(
           state.crypto_pid,
@@ -556,13 +564,15 @@ defmodule FragileWater.Game do
         Logger.info("[GameServer] CMSG_REALM_SPLIT")
 
         <<unk::little-unsigned-integer-size(32), _rest::binary>> = body
-        split_date = "01/01/01" <> <<0>>
+        split_date = IO.iodata_to_binary(["01/01/01", 0])
         realm_split_state = 0
 
         payload =
-          <<unk::little-unsigned-integer-size(32)>> <>
-            <<realm_split_state::little-unsigned-integer-size(32)>> <>
+          IO.iodata_to_binary([
+            <<unk::little-unsigned-integer-size(32)>>,
+            <<realm_split_state::little-unsigned-integer-size(32)>>,
             split_date
+          ])
 
         send_packet(
           state.crypto_pid,
@@ -605,29 +615,28 @@ defmodule FragileWater.Game do
     # https://github.com/gtker/wow_messages/blob/main/wow_message_parser/wowm/world/character_screen/smsg_char_enum_2_4_3.wowm#L3
 
     character_data =
-      <<character.guid::little-size(64)>> <>
-        (character.name <> <<0>>) <>
-        <<character.race, character.class, character.gender>> <>
+      IO.iodata_to_binary([
+        <<character.guid::little-size(64)>>,
+        <<character.name::binary, 0>>,
+        <<character.race, character.class, character.gender>>,
         <<character.skin, character.face, character.hair_style, character.hair_color,
-          character.facial_hair>> <>
-        <<character.level>> <>
-        <<character.area::little-size(32)>> <>
-        <<character.map::little-size(32)>> <>
-        <<character.x::little-float-size(32)>> <>
-        <<character.y::little-float-size(32)>> <>
-        <<character.z::little-float-size(32)>> <>
-        <<0::little-size(32)>> <>
-        <<0::little-size(32)>> <>
-        <<0>> <>
-        <<0::little-size(32)>> <>
-        <<0::little-size(32)>> <>
-        <<0::little-size(32)>>
+          character.facial_hair>>,
+        <<character.level>>,
+        <<character.area::little-size(32)>>,
+        <<character.map::little-size(32)>>,
+        <<character.x::little-float-size(32)>>,
+        <<character.y::little-float-size(32)>>,
+        <<character.z::little-float-size(32)>>,
+        <<0::little-size(32)>>,
+        <<0::little-size(32)>>,
+        <<0>>,
+        <<0::little-size(32)>>,
+        <<0::little-size(32)>>,
+        <<0::little-size(32)>>,
+        build_tbc_equipment()
+      ])
 
-    equipment_data = build_tbc_equipment()
-
-    final_data = character_data <> equipment_data
-
-    final_data
+    character_data
   end
 
   defp build_tbc_equipment() do
@@ -648,33 +657,35 @@ defmodule FragileWater.Game do
     tabard = Mangos.get(ItemTemplate, 15196)
 
     equipment_slots =
-      display_character_gear(head.display_id, 0, 0) <>
-        display_character_gear(0, 0, 0) <>
-        display_character_gear(shoulders.display_id, 0, 0) <>
-        display_character_gear(0, 0, 0) <>
-        display_character_gear(chest.display_id, 0, 0) <>
-        display_character_gear(waist.display_id, 0, 0) <>
-        display_character_gear(legs.display_id, 0, 0) <>
-        display_character_gear(feet.display_id, 0, 0) <>
-        display_character_gear(wrist.display_id, 0, 0) <>
-        display_character_gear(hands.display_id, 0, 0) <>
-        display_character_gear(0, 0, 0) <>
-        display_character_gear(0, 0, 0) <>
-        display_character_gear(0, 0, 0) <>
-        display_character_gear(0, 0, 0) <>
-        display_character_gear(back.display_id, 0, 0) <>
-        display_character_gear(main_hand.display_id, 0, 0) <>
-        display_character_gear(0, 0, 0) <>
-        display_character_gear(ranged.display_id, 0, 0) <>
-        display_character_gear(tabard.display_id, 0, 0) <>
+      IO.iodata_to_binary([
+        display_character_gear(head.display_id, 0, 0),
+        display_character_gear(0, 0, 0),
+        display_character_gear(shoulders.display_id, 0, 0),
+        display_character_gear(0, 0, 0),
+        display_character_gear(chest.display_id, 0, 0),
+        display_character_gear(waist.display_id, 0, 0),
+        display_character_gear(legs.display_id, 0, 0),
+        display_character_gear(feet.display_id, 0, 0),
+        display_character_gear(wrist.display_id, 0, 0),
+        display_character_gear(hands.display_id, 0, 0),
+        display_character_gear(0, 0, 0),
+        display_character_gear(0, 0, 0),
+        display_character_gear(0, 0, 0),
+        display_character_gear(0, 0, 0),
+        display_character_gear(back.display_id, 0, 0),
+        display_character_gear(main_hand.display_id, 0, 0),
+        display_character_gear(0, 0, 0),
+        display_character_gear(ranged.display_id, 0, 0),
+        display_character_gear(tabard.display_id, 0, 0),
         display_character_gear(0, 0, 0)
+      ])
 
     equipment_slots
   end
 
   defp send_packet(crypto_pid, opcode, socket, payload) do
     {:ok, header} = Session.encrypt_header(crypto_pid, opcode, payload)
-    ThousandIsland.Socket.send(socket, header <> payload)
+    ThousandIsland.Socket.send(socket, IO.iodata_to_binary([header, payload]))
   end
 
   defp display_character_gear(display_id, inventory_type, enchantment) do
@@ -686,8 +697,10 @@ defmodule FragileWater.Game do
     # InventoryType inventory_type;
     # u32 enchantment;
     # }
-    <<display_id::little-size(32)>> <>
-      <<inventory_type>> <>
+    IO.iodata_to_binary([
+      <<display_id::little-size(32)>>,
+      <<inventory_type>>,
       <<enchantment::little-size(32)>>
+    ])
   end
 end
