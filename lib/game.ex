@@ -264,6 +264,13 @@ defmodule FragileWater.Game do
         Logger.info("[GameServer] CMSG_PLAYER_LOGIN: character_guid: #{character_guid}")
 
         character = CharacterStorage.get_by_guid(state.username, character_guid)
+        race = DBC.get_by(ChrRaces, id: character.race)
+
+        unit_display_id =
+          case character.gender do
+            0 -> character.male_display
+            1 -> character.female_display
+          end
 
         IO.inspect(character)
 
@@ -519,14 +526,14 @@ defmodule FragileWater.Game do
             >> <>
             <<
               # offset 152: UNIT_DISPLAYID = 49 (male human)
-              49,
+              unit_display_id,
               0,
               0,
               0
             >> <>
             <<
               # offset 153: UNIT_NATIVEDISPLAYID = 50
-              50,
+              unit_display_id,
               0,
               0,
               0
