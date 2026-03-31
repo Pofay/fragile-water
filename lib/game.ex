@@ -28,9 +28,9 @@ defmodule FragileWater.Game do
   @smsg_char_create 0x03A
 
   @cmsg_player_login 0x03D
-  @smg_login_verify_world 0x236
-  @smg_tutorial_flags 0x0FD
-  @smg_update_object 0x0A9
+  @smsg_login_verify_world 0x236
+  @smsg_tutorial_flags 0x0FD
+  @smsg_update_object 0x0A9
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -278,14 +278,14 @@ defmodule FragileWater.Game do
 
         send_packet(
           state.crypto_pid,
-          @smg_login_verify_world,
+          @smsg_login_verify_world,
           socket,
           payload
         )
 
         send_packet(
           state.crypto_pid,
-          @smg_tutorial_flags,
+          @smsg_tutorial_flags,
           socket,
           <<0::little-size(256)>>
         )
@@ -556,7 +556,7 @@ defmodule FragileWater.Game do
               0
             >>
 
-        send_packet(state.crypto_pid, @smg_update_object, socket, packet)
+        send_packet(state.crypto_pid, @smsg_update_object, socket, packet)
 
         {:continue, state}
 
