@@ -7,6 +7,8 @@ defmodule FragileWater.Game do
   alias FragileWater.CharacterStorage
   alias FragileWater.Encryption
   alias FragileWater.Mangos
+  alias FragileWater.DBC
+  alias FragileWater.DBC.ChrRaces
   alias FragileWater.Mangos.ItemTemplate
   alias FragileWater.Mangos.PlayerCreateInfo
 
@@ -268,8 +270,8 @@ defmodule FragileWater.Game do
 
         unit_display_id =
           case character.gender do
-            0 -> character.male_display
-            1 -> character.female_display
+            0 -> race.male_display_id
+            1 -> race.female_display_id
           end
 
         IO.inspect(character)
