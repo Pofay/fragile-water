@@ -526,20 +526,8 @@ defmodule FragileWater.Game do
               character.gender,
               1
             >> <>
-            <<
-              # offset 152: UNIT_DISPLAYID = 49 (male human)
-              unit_display_id,
-              0,
-              0,
-              0
-            >> <>
-            <<
-              # offset 153: UNIT_NATIVEDISPLAYID = 50
-              unit_display_id,
-              0,
-              0,
-              0
-            >>
+            <<unit_display_id::little-size(32)>> <>
+            <<unit_display_id::little-size(32)>>
 
         send_packet(state.crypto_pid, @smsg_update_object, socket, packet)
 
