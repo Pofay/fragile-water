@@ -338,34 +338,10 @@ defmodule FragileWater.Game do
               0,
               0
             >> <>
-            <<
-              # position x (-8949.95)
-              205,
-              215,
-              11,
-              198
-            >> <>
-            <<
-              # position y (-132.493)
-              53,
-              126,
-              4,
-              195
-            >> <>
-            <<
-              # position z (83.5312)
-              249,
-              15,
-              167,
-              66
-            >> <>
-            <<
-              # orientation (0.0)
-              0,
-              0,
-              0,
-              0
-            >> <>
+            <<character.x::little-float-size(32)>> <>
+            <<character.y::little-float-size(32)>> <>
+            <<character.z::little-float-size(32)>> <>
+            <<character.orientation::little-float-size(32)>> <>
             <<
               # fall time (0.0)
               0,
