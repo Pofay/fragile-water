@@ -381,31 +381,19 @@ defmodule FragileWater.Game do
             >> <>
             <<
               # swim speed (0.0)
-              0,
-              0,
-              0,
-              0
+              0::float-little-size(32)
             >> <>
             <<
               # flying speed (0.0)
-              0,
-              0,
-              0,
-              0
+              0::float-little-size(32)
             >> <>
             <<
               # backwards flying speed (0.0)
-              0,
-              0,
-              0,
-              0
+              0::float-little-size(32)
             >> <>
             <<
               # backwards swim speed (0.0)
-              0,
-              0,
-              0,
-              0
+              0::float-little-size(32),
             >> <>
             <<
               # turn rate (pi ≈ 3.14159)
