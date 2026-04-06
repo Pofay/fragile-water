@@ -265,6 +265,13 @@ defmodule FragileWater.Game do
         <<character_guid::little-size(64)>> = body
         Logger.info("[GameServer] CMSG_PLAYER_LOGIN: character_guid: #{character_guid}")
 
+        send_packet(
+          state.crypto_pid,
+          @smsg_tutorial_flags,
+          socket,
+          <<0xFFFFFFFFFFFFFFFF::little-size(256)>>
+        )
+
         character = CharacterStorage.get_by_guid(state.username, character_guid)
         race = DBC.get_by(ChrRaces, id: character.race)
 
