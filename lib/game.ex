@@ -353,31 +353,19 @@ defmodule FragileWater.Game do
             <<character.orientation::little-float-size(32)>> <>
             <<
               # fall time (0.0)
-              0,
-              0,
-              0,
-              0
+              0.0::float-little-size(32)
             >> <>
             <<
               # walk speed (1.0)
-              0,
-              0,
-              128,
-              63
+              1.0::float-little-size(32)
             >> <>
             <<
               # run speed (7.0)
-              0,
-              0,
-              224,
-              64
+              7.0::float-little-size(32)
             >> <>
             <<
               # run back speed (4.5)
-              0,
-              0,
-              144,
-              64
+              4.5::float-little-size(32)
             >> <>
             <<
               # swim speed (0.0)
@@ -393,14 +381,11 @@ defmodule FragileWater.Game do
             >> <>
             <<
               # backwards swim speed (0.0)
-              0::float-little-size(32),
+              0::float-little-size(32)
             >> <>
             <<
               # turn rate (pi ≈ 3.14159)
-              219,
-              15,
-              73,
-              64
+              3.1415::float-little-size(32)
             >> <>
             <<
               # === ALL flag payload: unknown2 u32 ===
