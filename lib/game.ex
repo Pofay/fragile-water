@@ -34,6 +34,11 @@ defmodule FragileWater.Game do
   @smsg_tutorial_flags 0x0FD
   @smsg_update_object 0x0A9
 
+  @cmsg_set_active_mover 0x26A
+  @smsg_time_sync_req 0x390
+  @cmsg_time_sync_resp 0x391
+
+
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
     seed = :crypto.strong_rand_bytes(4)
@@ -527,6 +532,22 @@ defmodule FragileWater.Game do
           payload
         )
 
+        {:continue, state}
+
+      @cmsg_set_active_mover ->
+        Logger.info("[GameServer] CMSG_SET_ACTIVE_MOVER")
+
+        send_packet(
+          state.crypto_pid,
+          @smsg_time_sync_req,
+          socket,
+          <<0::little-size(32)>>
+        )
+
+        {:continue, Map.put(state, :time_sync_counter, 1)}
+
+      @cmsg_time_sync_resp ->
+        Logger.info("[GameServer] CMSG_TIME_SYNC_RESP")
         {:continue, state}
 
       _ ->
