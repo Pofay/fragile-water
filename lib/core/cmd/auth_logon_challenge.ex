@@ -14,7 +14,7 @@ defmodule FragileWater.Core.Cmd.AuthLogonChallenge do
           _locale::bytes-little-size(4), _world_region_bias::little-size(32),
           _ip::little-size(32), account_name_length::unsigned-little-size(8),
           account_name::bytes-little-size(account_name_length)>>,
-          _state
+        _state
       ) do
     Logger.info("[AuthServer]: AUTH_LOGON_CHALLENGE for: #{account_name}")
 
@@ -37,6 +37,10 @@ defmodule FragileWater.Core.Cmd.AuthLogonChallenge do
     Logger.info("[AuthServer]: Server Proof Generated")
     Logger.info("#{inspect(packet)}")
 
-    {state, packet}
+    {:continue, state, packet}
+  end
+
+  def post_handle(state) do
+    state
   end
 end

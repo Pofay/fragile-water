@@ -1,5 +1,6 @@
 defmodule FragileWater.Core.Cmd.AuthLogonProof do
   alias FragileWater.Core.AuthUtils
+  alias FragileWater.SessionKeyStorage
 
   import Binary, only: [reverse: 1]
 
@@ -67,13 +68,18 @@ defmodule FragileWater.Core.Cmd.AuthLogonProof do
 
       Logger.info("Packet: #{inspect(packet)}")
 
-      {state, packet}
+      {:continue, state, packet}
     else
       Logger.error("Client proof does not match!")
       Logger.info("public_a: #{inspect(public_a)}")
       Logger.info("client_proof: #{inspect(client_proof)}")
       Logger.info("m: #{inspect(m)}")
-      {state, <<0, 0, 5>>}
+      {:close, state, <<0, 0, 5>>}
     end
+  end
+
+  def post_handle(state) do
+    SessionKeyStorage.put(state.account_name, state.session)
+    state
   end
 end

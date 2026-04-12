@@ -34,6 +34,10 @@ defmodule FragileWater.Core.Cmd.RealmList do
         <<num_realms::little-size(16)>>
 
     packet = header <> body
-    {state, packet}
+    {:continue, state, packet}
+  end
+
+  def post_handle(state) do
+    state
   end
 end
