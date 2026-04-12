@@ -60,11 +60,13 @@ defmodule FragileWater.Core.Cmd.AuthLogonProof do
 
       # From https://wowdev.wiki/CMD_AUTH_LOGON_PROOF_Server
       packet =
-        <<1, 0>> <>
-          state.server_proof <>
-          <<0, 0, 128, 0>> <>
-          <<0, 0, 0, 0>> <>
+        IO.iodata_to_binary([
+          <<1, 0>>,
+          state.server_proof,
+          <<0, 0, 128, 0>>,
+          <<0, 0, 0, 0>>,
           <<0, 0>>
+        ])
 
       Logger.info("Packet: #{inspect(packet)}")
 

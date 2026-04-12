@@ -24,15 +24,17 @@ defmodule FragileWater.Core.Cmd.AuthLogonChallenge do
 
     # From https://wowdev.wiki/CMD_AUTH_LOGON_CHALLENGE_Server
     packet =
-      <<0, 0, 0>> <>
-        reverse(state.public_b) <>
-        <<1>> <>
-        state.g <>
-        <<32>> <>
-        reverse(state.n) <>
-        state.salt <>
-        unk3 <>
-        <<0>>
+      IO.iodata_to_binary([
+        <<0, 0, 0>> <>
+          reverse(state.public_b) <>
+          <<1>> <>
+          state.g <>
+          <<32>> <>
+          reverse(state.n) <>
+          state.salt <>
+          unk3 <>
+          <<0>>
+      ])
 
     Logger.info("[AuthServer]: Server Proof Generated")
     Logger.info("#{inspect(packet)}")
