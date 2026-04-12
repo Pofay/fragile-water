@@ -1,8 +1,13 @@
 defmodule FragileWater.Core.Cmd.RealmList do
+  @behaviour FragileWater.Core.Cmd.AuthHandler
+
+  alias FragileWater.Core.Cmd.AuthHandler
+
   @cmd_realm_list 16
 
   require Logger
 
+  @impl AuthHandler
   def generate_payload(<<@cmd_realm_list, _padding::binary>>, state) do
     # From https://wowdev.wiki/CMD_REALM_LIST_Server
     Logger.info("[AuthServer]: REALM_LIST #{inspect(@cmd_realm_list)}")
@@ -40,7 +45,13 @@ defmodule FragileWater.Core.Cmd.RealmList do
     {:continue, state, packet}
   end
 
+  @impl AuthHandler
   def post_handle(state) do
     state
+  end
+
+  @impl AuthHandler
+  def can_handle?(opcode) do
+    opcode == @cmd_realm_list
   end
 end

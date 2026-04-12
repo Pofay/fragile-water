@@ -10,27 +10,27 @@ defmodule FragileWater.Auth do
   alias FragileWater.Core.Cmd.AuthLogonProof
   alias FragileWater.Core.Cmd.RealmList
 
-  @cmd_auth_logon_challenge 0
-  @cmd_auth_logon_proof 1
-  @cmd_realm_list 16
-
-  @handlers %{
-    @cmd_auth_logon_challenge => AuthLogonChallenge,
-    @cmd_auth_logon_proof => AuthLogonProof,
-    @cmd_realm_list => RealmList
-  }
+  @handlers [
+    AuthLogonChallenge,
+    AuthLogonProof,
+    RealmList
+  ]
 
   @impl ThousandIsland.Handler
-  def handle_data(<<opcode, _packet::binary>> = request_packet, socket, state) do
-    case Map.get(@handlers, opcode) do
+  def handle_data(<<opcode, _packet::binary>> = request, socket, state) do
+    handler =
+      @handlers
+      |> Enum.find(fn handler -> handler.can_handle?(opcode) end)
+
+    case handler do
       nil ->
         Logger.error("UNHANDLED opcode: #{opcode}")
         ThousandIsland.Socket.send(socket, <<0, 0, 5>>)
         {:close, state}
 
       handler ->
-        {action, state, response_packet} = handler.generate_payload(request_packet, state)
-        ThousandIsland.Socket.send(socket, response_packet)
+        {action, state, response} = handler.generate_payload(request, state)
+        ThousandIsland.Socket.send(socket, response)
         {action, handler.post_handle(state)}
     end
   end

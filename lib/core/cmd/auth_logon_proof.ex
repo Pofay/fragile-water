@@ -1,4 +1,7 @@
 defmodule FragileWater.Core.Cmd.AuthLogonProof do
+  @behaviour FragileWater.Core.Cmd.AuthHandler
+
+  alias FragileWater.Core.Cmd.AuthHandler
   alias FragileWater.Core.AuthUtils
   alias FragileWater.SessionKeyStorage
 
@@ -11,6 +14,7 @@ defmodule FragileWater.Core.Cmd.AuthLogonProof do
        191, 94, 143, 171, 60, 130, 135, 42, 62, 155, 183>>
   @g <<7>>
 
+  @impl AuthHandler
   def generate_payload(
         <<@cmd_auth_logon_proof, client_public_key::little-bytes-size(32),
           client_proof::little-bytes-size(20), _crc_hash::little-bytes-size(20),
@@ -80,8 +84,14 @@ defmodule FragileWater.Core.Cmd.AuthLogonProof do
     end
   end
 
+  @impl AuthHandler
   def post_handle(state) do
     SessionKeyStorage.put(state.account_name, state.session)
     state
+  end
+
+  @impl AuthHandler
+  def can_handle?(opcode) do
+    opcode == @cmd_auth_logon_proof
   end
 end

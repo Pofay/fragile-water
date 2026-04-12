@@ -1,4 +1,7 @@
 defmodule FragileWater.Core.Cmd.AuthLogonChallenge do
+  @behaviour FragileWater.Core.Cmd.AuthHandler
+
+  alias FragileWater.Core.Cmd.AuthHandler
   alias FragileWater.Core.AuthUtils
 
   import Binary, only: [reverse: 1]
@@ -7,6 +10,7 @@ defmodule FragileWater.Core.Cmd.AuthLogonChallenge do
 
   @cmd_auth_logon_challenge 0
 
+  @impl AuthHandler
   def generate_payload(
         <<@cmd_auth_logon_challenge, _protocol_version::little-size(8), _size::little-size(16),
           _game_name::bytes-little-size(4), _version::bytes-little-size(3),
@@ -42,7 +46,13 @@ defmodule FragileWater.Core.Cmd.AuthLogonChallenge do
     {:continue, state, packet}
   end
 
+  @impl AuthHandler
   def post_handle(state) do
     state
+  end
+
+  @impl AuthHandler
+  def can_handle?(opcode) do
+    opcode == @cmd_auth_logon_challenge
   end
 end
