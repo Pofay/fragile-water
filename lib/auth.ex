@@ -21,7 +21,7 @@ defmodule FragileWater.Auth do
   }
 
   @impl ThousandIsland.Handler
-  def handle_data(<<opcode, _packet::binary>>, socket, state) do
+  def handle_data(<<opcode, _packet::binary>> = request_packet, socket, state) do
     case Map.get(@handlers, opcode) do
       nil ->
         Logger.error("UNHANDLED opcode: #{opcode}")
@@ -29,8 +29,8 @@ defmodule FragileWater.Auth do
         {:close, state}
 
       handler ->
-        {action, state, packet} = handler.generate_payload(<<opcode, _packet::binary>>, state)
-        ThousandIsland.Socket.send(socket, packet)
+        {action, state, response_packet} = handler.generate_payload(request_packet, state)
+        ThousandIsland.Socket.send(socket, response_packet)
         {action, handler.post_handle(state)}
     end
   end
