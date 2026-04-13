@@ -50,9 +50,4 @@ defmodule FragileWater.Core.Cmd.AuthLogonChallenge do
   def post_handle(state) do
     state
   end
-
-  @impl AuthHandler
-  def can_handle?(opcode) do
-    opcode == @cmd_auth_logon_challenge
-  end
 end

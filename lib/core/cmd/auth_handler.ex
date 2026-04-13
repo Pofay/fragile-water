@@ -4,6 +4,4 @@ defmodule FragileWater.Core.Cmd.AuthHandler do
               | {:close, new_state :: map}
 
   @callback post_handle(state :: map) :: new_state :: map
-
-  @callback can_handle?(opcode :: integer) :: boolean
 end

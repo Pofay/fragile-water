@@ -89,9 +89,4 @@ defmodule FragileWater.Core.Cmd.AuthLogonProof do
     SessionKeyStorage.put(state.account_name, state.session)
     state
   end
-
-  @impl AuthHandler
-  def can_handle?(opcode) do
-    opcode == @cmd_auth_logon_proof
-  end
 end

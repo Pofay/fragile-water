@@ -6,23 +6,11 @@ defmodule FragileWater.Auth do
   use ThousandIsland.Handler
   require Logger
 
-  alias FragileWater.Core.Cmd.AuthLogonChallenge
-  alias FragileWater.Core.Cmd.AuthLogonProof
-  alias FragileWater.Core.Cmd.RealmList
-
-  @handlers [
-    AuthLogonChallenge,
-    AuthLogonProof,
-    RealmList
-  ]
+  alias FragileWater.Core.Handlers
 
   @impl ThousandIsland.Handler
   def handle_data(<<opcode, _packet::binary>> = request, socket, state) do
-    handler =
-      @handlers
-      |> Enum.find(fn handler -> handler.can_handle?(opcode) end)
-
-    case handler do
+    case Handlers.get_auth_handler(opcode) do
       nil ->
         Logger.error("UNHANDLED opcode: #{opcode}")
         ThousandIsland.Socket.send(socket, <<0, 0, 5>>)
