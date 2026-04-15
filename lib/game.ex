@@ -2,6 +2,7 @@ defmodule FragileWater.Game do
   use ThousandIsland.Handler
   require Logger
 
+  alias FragileWater.Core.CharacterUtils
   alias FragileWater.Session
   alias FragileWater.SessionKeyStorage
   alias FragileWater.CharacterStorage
@@ -37,7 +38,6 @@ defmodule FragileWater.Game do
   @cmsg_set_active_mover 0x26A
   @smsg_time_sync_req 0x390
   @cmsg_time_sync_resp 0x391
-
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -189,7 +189,7 @@ defmodule FragileWater.Game do
         Logger.info("[GameServer] CMSG_CHAR_ENUM Number of Characters: #{inspect(length)}")
 
         characters_payload =
-          Enum.map(characters, &build_character_enum_data(&1))
+          Enum.map(characters, &CharacterUtils.build_character_enum_data(&1))
 
         payload =
           case length do
@@ -226,7 +226,7 @@ defmodule FragileWater.Game do
       @cmsg_char_create ->
         Logger.info("[GameServer] CMSG_CHAR_CREATE")
 
-        character_data = parse_char_create_body(body)
+        character_data = CharacterUtils.parse_char_create_body(body)
 
         additional_info =
           Mangos.get_by(PlayerCreateInfo,
@@ -278,8 +278,6 @@ defmodule FragileWater.Game do
             0 -> race.male_display_id
             1 -> race.female_display_id
           end
-
-        IO.inspect(character)
 
         payload =
           IO.iodata_to_binary([
@@ -556,118 +554,8 @@ defmodule FragileWater.Game do
     end
   end
 
-  defp parse_char_create_body(body) do
-    {name, rest} = extract_name_with_rest(body)
-
-    <<race, char_class, gender, skin, face, hair_style, hair_color, facial_hair, outfit_id,
-      _rest::binary>> =
-      rest
-
-    %{
-      name: name,
-      race: race,
-      char_class: char_class,
-      gender: gender,
-      skin: skin,
-      face: face,
-      hair_style: hair_style,
-      hair_color: hair_color,
-      facial_hair: facial_hair,
-      outfit_id: outfit_id
-    }
-  end
-
-  defp build_character_enum_data(character) do
-    # From https://gtker.com/wow_messages/docs/smsg_char_enum.html#client-version-243
-    # https://github.com/gtker/wow_messages/blob/main/wow_message_parser/wowm/world/character_screen/smsg_char_enum_2_4_3.wowm#L3
-
-    character_data =
-      IO.iodata_to_binary([
-        <<character.guid::little-size(64)>>,
-        <<character.name::binary, 0>>,
-        <<character.race, character.class, character.gender>>,
-        <<character.skin, character.face, character.hair_style, character.hair_color,
-          character.facial_hair>>,
-        <<character.level>>,
-        <<character.area::little-size(32)>>,
-        <<character.map::little-size(32)>>,
-        <<character.x::little-float-size(32)>>,
-        <<character.y::little-float-size(32)>>,
-        <<character.z::little-float-size(32)>>,
-        <<0::little-size(32)>>,
-        <<0::little-size(32)>>,
-        <<0>>,
-        <<0::little-size(32)>>,
-        <<0::little-size(32)>>,
-        <<0::little-size(32)>>,
-        build_tbc_equipment()
-      ])
-
-    character_data
-  end
-
-  defp build_tbc_equipment() do
-    # Example for Dreadnaught battlegear:
-    chest = Mangos.get(ItemTemplate, 22416)
-    legs = Mangos.get(ItemTemplate, 22417)
-    head = Mangos.get(ItemTemplate, 22418)
-    shoulders = Mangos.get(ItemTemplate, 22419)
-    feet = Mangos.get(ItemTemplate, 22420)
-    hands = Mangos.get(ItemTemplate, 22421)
-    waist = Mangos.get(ItemTemplate, 22422)
-    wrist = Mangos.get(ItemTemplate, 22423)
-
-    # Dory's Embrace, Corrupted Ashbringer, Thoridal and Alliance Tabard
-    back = Mangos.get(ItemTemplate, 33484)
-    main_hand = Mangos.get(ItemTemplate, 22691)
-    ranged = Mangos.get(ItemTemplate, 34334)
-    tabard = Mangos.get(ItemTemplate, 15196)
-
-    equipment_slots =
-      IO.iodata_to_binary([
-        display_character_gear(head.display_id, 0, 0),
-        display_character_gear(0, 0, 0),
-        display_character_gear(shoulders.display_id, 0, 0),
-        display_character_gear(0, 0, 0),
-        display_character_gear(chest.display_id, 0, 0),
-        display_character_gear(waist.display_id, 0, 0),
-        display_character_gear(legs.display_id, 0, 0),
-        display_character_gear(feet.display_id, 0, 0),
-        display_character_gear(wrist.display_id, 0, 0),
-        display_character_gear(hands.display_id, 0, 0),
-        display_character_gear(0, 0, 0),
-        display_character_gear(0, 0, 0),
-        display_character_gear(0, 0, 0),
-        display_character_gear(0, 0, 0),
-        display_character_gear(back.display_id, 0, 0),
-        display_character_gear(main_hand.display_id, 0, 0),
-        display_character_gear(0, 0, 0),
-        display_character_gear(ranged.display_id, 0, 0),
-        display_character_gear(tabard.display_id, 0, 0),
-        display_character_gear(0, 0, 0)
-      ])
-
-    equipment_slots
-  end
-
   defp send_packet(crypto_pid, opcode, socket, payload) do
     {:ok, header} = Session.encrypt_header(crypto_pid, opcode, payload)
     ThousandIsland.Socket.send(socket, IO.iodata_to_binary([header, payload]))
-  end
-
-  defp display_character_gear(display_id, inventory_type, enchantment) do
-    # TBC has enchantment value while Vanilla doesn't have it.
-    # At https://github.com/gtker/wow_messages/blob/main/wow_message_parser/wowm/world/character_screen/smsg_char_enum_2_4_3.wowm#L3
-
-    # struct CharacterGear {
-    # u32 equipment_display_id;
-    # InventoryType inventory_type;
-    # u32 enchantment;
-    # }
-    IO.iodata_to_binary([
-      <<display_id::little-size(32)>>,
-      <<inventory_type>>,
-      <<enchantment::little-size(32)>>
-    ])
   end
 end
