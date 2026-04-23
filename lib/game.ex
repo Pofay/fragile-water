@@ -2,6 +2,8 @@ defmodule FragileWater.Game do
   use ThousandIsland.Handler
   require Logger
 
+  import FragileWater.Core.BinaryUtils, only: [extract_name_with_rest: 1]
+
   alias FragileWater.Core.CharacterUtils
   alias FragileWater.Session
   alias FragileWater.SessionKeyStorage
@@ -10,7 +12,6 @@ defmodule FragileWater.Game do
   alias FragileWater.Mangos
   alias FragileWater.DBC
   alias FragileWater.DBC.ChrRaces
-  alias FragileWater.Mangos.ItemTemplate
   alias FragileWater.Mangos.PlayerCreateInfo
 
   @smsg_auth_challenge 0x1EC
@@ -166,17 +167,6 @@ defmodule FragileWater.Game do
 
   defp extract_payload(_body, _body_size), do: :incomplete_payload
 
-  defp extract_name_with_rest(payload) do
-    case :binary.match(payload, <<0>>) do
-      {idx, _len} ->
-        name = :binary.part(payload, 0, idx)
-        rest = :binary.part(payload, idx + 1, byte_size(payload) - (idx + 1))
-        {name, rest}
-
-      :nomatch ->
-        {payload, <<>>}
-    end
-  end
 
   defp handle_world_packet(opcode, size, body, state, socket) do
     case opcode do

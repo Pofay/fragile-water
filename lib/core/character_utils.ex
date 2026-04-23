@@ -1,4 +1,6 @@
 defmodule FragileWater.Core.CharacterUtils do
+  import FragileWater.Core.BinaryUtils, only: [extract_name_with_rest: 1]
+
   def parse_char_create_body(body) do
     {name, rest} = extract_name_with_rest(body)
 
