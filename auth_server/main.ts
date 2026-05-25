@@ -2,18 +2,28 @@ const listener = Deno.listen({ port: 3724 });
 console.log("Deno Auth Server listening on 0.0.0.0:3724");
 
 const CMD_AUTH_LOGON_CHALLENGE = 0x00;
+const username = "pofay";
+const password = "pofay";
+const N = BigInt(
+  "0x894B645E89E1535BBDAD5B8B290650530801B18EBFBF5E8FAB3C82872A3E9BB7",
+);
+const G = 7n;
 
 for await (const conn of listener) {
-  handleConn(conn);
+  const state = createAccountState();
+
+  handleConn(conn, state);
 }
 
-async function handleConn(conn: Deno.Conn) {
+async function handleConn(conn: Deno.Conn, state: AccountState) {
+  let mutableState = state;
+
   for await (const chunk of conn.readable) {
     const cmd = chunk[0];
 
     switch (cmd) {
       case CMD_AUTH_LOGON_CHALLENGE:
-        handleLogonChallenge(chunk);
+        mutableState = await handleLogonChallenge(chunk, mutableState);
         break;
       default:
         console.warn(`Unknown opcode: 0x${cmd.toString(16).padStart(2, "0")}`);
@@ -21,8 +31,25 @@ async function handleConn(conn: Deno.Conn) {
   }
 }
 
-async function handleLogonChallenge(chunk: Uint8Array<ArrayBuffer>) {
+async function handleLogonChallenge(
+  chunk: Uint8Array<ArrayBuffer>,
+  state: AccountState,
+) {
   const packet = parseAuthLogonChallenge(chunk);
+
+  console.info(`[AuthServer]: AUTH_LOGON_CHALLENGE for: ${packet.accountName}`);
+
+  const salt = crypto.getRandomValues(new Uint8Array(32));
+  const hash = await generateSRPHash(username, password);
+  const x = await generateX(salt, hash);
+  const verifier = G ** x % N;
+  const privateB = crypto.getRandomValues(new Uint8Array(19));
+  
+
+  const updatedState = state;
+  updatedState.accountName = packet.accountName;
+  updatedState.salt = salt;
+  updatedState.verifier = verifier;
 
   console.table(packet);
 }
@@ -37,7 +64,7 @@ function parseAuthLogonChallenge(chunk: Uint8Array<ArrayBuffer>) {
   const protocolVersion = view.getUint8(offset);
   offset += 1;
   const size = view.getUint16(offset, true);
-  offset += 2; // little-endian
+  offset += 2;
   const gameName = chunk.slice(offset, offset + 4);
   offset += 4;
   const version = chunk.slice(offset, offset + 3);
@@ -74,4 +101,55 @@ function parseAuthLogonChallenge(chunk: Uint8Array<ArrayBuffer>) {
     ip,
     accountName,
   };
+}
+
+function createAccountState() {
+  return {
+    accountName: "",
+    salt: Uint8Array.from([0, 0, 0, 0, 0, 0, 0, 0]),
+    verifier: BigInt(0),
+    publicB: BigInt(0),
+    privateB: BigInt(0),
+  };
+}
+
+interface AccountState {
+  accountName: string;
+  salt: Uint8Array;
+  verifier: bigint;
+  publicB: bigint;
+  privateB: bigint;
+}
+
+async function generateSRPHash(username: string, password: string) {
+  const encoder = new TextEncoder();
+
+  const hashString = await crypto.subtle.digest(
+    "SHA-1",
+    encoder.encode(username.toUpperCase() + ":" + password.toUpperCase()),
+  );
+
+  return new Uint8Array(hashString);
+}
+
+async function generateX(salt: Uint8Array, hash: Uint8Array) {
+  const concat = (a: Uint8Array, b: Uint8Array): ArrayBuffer => {
+    const result = new Uint8Array(a.length + b.length);
+    result.set(a, 0);
+    result.set(b, a.length);
+    return result.buffer;
+  };
+
+  const x = new Uint8Array(
+    await crypto.subtle.digest(
+      "SHA-1",
+      concat(salt, hash),
+    ),
+  );
+
+  return bytesToBigInt(x.reverse());
+}
+
+function bytesToBigInt(bytes: Uint8Array): bigint {
+  return bytes.reduceRight((acc, byte) => (acc << 8n) | BigInt(byte), 0n);
 }
