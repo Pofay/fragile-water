@@ -80,6 +80,8 @@ defmodule FragileWater.Game do
 
     Logger.info("[GameServer] Username: #{username}")
 
+    # Will use ValKey here to retrieve the session created
+    # by the Deno authentication server
     {username, session} = hd(SessionKeyStorage.get(username))
 
     data =
